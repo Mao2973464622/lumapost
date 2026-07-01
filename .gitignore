@@ -1,0 +1,29 @@
+# WorkBuddy 私有数据
+.workbuddy/
+.codebuddy/
+
+# 敏感信息
+.env
+.env.local
+
+# 依赖
+node_modules/
+
+# 日志
+*.log
+logs/
+
+# data 目录生成文件
+data/*.json
+data/*.html
+!data/.gitkeep
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+
+# 测试
+coverage/

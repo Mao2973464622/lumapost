@@ -1,0 +1,28 @@
+version: '3.8'
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+#  Docker Compose for LumaPost
+#  部署: docker compose up -d
+#  测试: docker compose run --rm lumapost all:morning
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+services:
+  lumapost:
+    build: .
+    restart: unless-stopped
+    env_file:
+      - .env
+    volumes:
+      - ./data:/app/data
+      - ./logs:/app/logs
+    # 每天 4 次定时执行（使用 ofelia cron 容器）
+    # 或单独运行: docker compose run --rm lumapost all:evening
+
+  # 定时器（替代 cron）
+  cron:
+    image: mcuadros/ofelia:latest
+    depends_on:
+      - lumapost
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./ofelia.ini:/etc/ofelia/config.ini:ro

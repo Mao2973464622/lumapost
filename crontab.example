@@ -1,0 +1,16 @@
+# LumaPost 定时任务 (crontab)
+# 安装: crontab crontab.example
+# 查看: crontab -l
+# 日志: tail -f /var/log/syslog | grep lumapost
+
+# 早报 - 每天早上 6:00
+0 6 * * *  cd /opt/lumapost/lumapost && npm run all:morning  >> /var/log/lumapost/morning.log 2>&1
+
+# 午报 - 每天中午 12:00
+0 12 * * * cd /opt/lumapost/lumapost && npm run all:noon     >> /var/log/lumapost/noon.log 2>&1
+
+# 午后速递 - 每天下午 16:00
+0 16 * * * cd /opt/lumapost/lumapost && npm run all:afternoon >> /var/log/lumapost/afternoon.log 2>&1
+
+# 晚间总结 - 每天午夜 24:00
+0 0 * * *  cd /opt/lumapost/lumapost && npm run all:evening  >> /var/log/lumapost/evening.log 2>&1

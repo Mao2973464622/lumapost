@@ -1,0 +1,59 @@
+{
+  "name": "lumapost",
+  "version": "2.0.0",
+  "description": "LumaPost - 光影邮报：AI 驱动的智能新闻邮件推送系统。支持 10+ AI 模型（DeepSeek/MiniMax/OpenAI/Claude/通义千问/智谱/豆包/Kimi等）、10+ 邮件服务（QQ/网易/Gmail/Outlook/Resend/SendGrid等），GitHub Actions 云端部署，电脑关机也能发。",
+  "main": "scripts/gen-html.js",
+  "scripts": {
+    "ai:list": "node scripts/ai-provider.js --list",
+    "ai:test": "node scripts/ai-provider.js --test",
+    "ai:config": "node scripts/ai-provider.js --config",
+    "mail:list": "node scripts/mail-provider.js --list",
+    "mail:test": "node scripts/mail-provider.js --test",
+    "mail:config": "node scripts/mail-provider.js --config",
+    "fetch:morning": "node scripts/fetch-news-ai.js --period=morning --output=data/morning-latest.json",
+    "fetch:noon": "node scripts/fetch-news-ai.js --period=noon --output=data/noon-latest.json",
+    "fetch:afternoon": "node scripts/fetch-news-ai.js --period=afternoon --output=data/afternoon-latest.json",
+    "fetch:evening": "node scripts/fetch-news-ai.js --period=evening --output=data/evening-latest.json",
+    "fetch:fallback:morning": "node scripts/fetch-cn-news.js --output=data/morning-latest.json",
+    "fetch:fallback:noon": "node scripts/fetch-cn-news.js --output=data/noon-latest.json",
+    "fetch:fallback:afternoon": "node scripts/fetch-cn-news.js --output=data/afternoon-latest.json",
+    "fetch:fallback:evening": "node scripts/fetch-cn-news.js --output=data/evening-latest.json",
+    "gen:morning": "node scripts/gen-html.js --data-file=data/morning-latest.json --output=data/morning-email.html",
+    "gen:noon": "node scripts/gen-html.js --data-file=data/noon-latest.json --output=data/noon-email.html",
+    "gen:afternoon": "node scripts/gen-html.js --data-file=data/afternoon-latest.json --output=data/afternoon-email.html",
+    "gen:evening": "node scripts/gen-html.js --data-file=data/evening-latest.json --output=data/evening-email.html",
+    "send:morning": "node scripts/mail-provider.js --send --subject=\"✨ LumaPost · 光影邮报 · 早报\" --body-file=data/morning-email.html",
+    "send:noon": "node scripts/mail-provider.js --send --subject=\"✨ LumaPost · 光影邮报 · 午报\" --body-file=data/noon-email.html",
+    "send:afternoon": "node scripts/mail-provider.js --send --subject=\"✨ LumaPost · 光影邮报 · 午后速递\" --body-file=data/afternoon-email.html",
+    "send:evening": "node scripts/mail-provider.js --send --subject=\"✨ LumaPost · 光影邮报 · 晚间总结\" --body-file=data/evening-email.html",
+    "send:test": "node scripts/mail-provider.js --test",
+    "all:morning": "npm run fetch:morning && npm run gen:morning && npm run send:morning",
+    "all:noon": "npm run fetch:noon && npm run gen:noon && npm run send:noon",
+    "all:afternoon": "npm run fetch:afternoon && npm run gen:afternoon && npm run send:afternoon",
+    "all:evening": "npm run fetch:evening && npm run gen:evening && npm run send:evening"
+  },
+  "keywords": [
+    "news",
+    "email",
+    "automation",
+    "ai",
+    "llm",
+    "deepseek",
+    "minimax",
+    "github-actions",
+    "daily-digest"
+  ],
+  "author": "QiXua",
+  "license": "MIT",
+  "dependencies": {
+    "dotenv": "^17.4.2",
+    "nodemailer": "^6.9.8"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Mao2973464622/lumapost.git"
+  }
+}

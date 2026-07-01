@@ -1,0 +1,16 @@
+[Unit]
+Description=LumaPost 光影邮报 - 智能新闻邮件推送
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=www-data
+WorkingDirectory=/opt/lumapost/lumapost
+EnvironmentFile=/opt/lumapost/lumapost/.env
+ExecStart=/usr/bin/node scripts/fetch-news-ai.js --period=morning --output=data/morning-latest.json
+ExecStartPost=/usr/bin/node scripts/gen-html.js --data-file=data/morning-latest.json --output=data/morning-email.html
+ExecStartPost=/usr/bin/node scripts/mail-provider.js --send --subject="晨报" --body-file=data/morning-email.html
+StandardOutput=journal
+
+# 4 个定时器分别在 4 个时段触发（见 lumapost-*.timer）

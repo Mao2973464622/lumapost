@@ -1,0 +1,110 @@
+name: LumaPost Email
+
+on:
+  workflow_dispatch:
+    inputs:
+      period:
+        description: '时段（auto=自动判断）'
+        required: false
+        type: choice
+        default: 'auto'
+        options: [auto, morning, noon, afternoon, evening]
+      preview:
+        description: '仅生成预览（不发邮件）'
+        type: boolean
+        default: false
+
+  # 中国时间 → UTC
+  # 06:00 = 22:00 UTC / 12:00 = 04:00 UTC
+  # 17:30 = 09:30 UTC / 21:00 = 13:00 UTC
+  schedule:
+    - cron: '0 22 * * *'     # 中国 06:00 早报
+    - cron: '0 4 * * *'      # 中国 12:00 午报
+    - cron: '30 9 * * *'     # 中国 17:30 傍晚
+    - cron: '0 13 * * *'     # 中国 21:00 夜间
+
+permissions:
+  contents: read
+
+env:
+  AI_PROVIDER: ${{ vars.AI_PROVIDER || 'deepseek' }}
+  AI_MODEL: ${{ vars.AI_MODEL || '' }}
+  AI_TEMP: ${{ vars.AI_TEMP || '0.7' }}
+  AI_MAX_TOKENS: ${{ vars.AI_MAX_TOKENS || '8000' }}
+  MAIL_PROVIDER: ${{ vars.MAIL_PROVIDER || 'qq' }}
+  WEATHER_LAT: ${{ vars.WEATHER_LAT || '28.20' }}
+  WEATHER_LON: ${{ vars.WEATHER_LON || '112.97' }}
+
+jobs:
+  send:
+    name: 📮 LumaPost v2.8
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: package-lock.json
+      - run: npm install --no-audit --no-fund
+
+      - name: ⏰ 时段（转中国时间）
+        id: period
+        run: |
+          P="${{ inputs.period }}"
+          if [ -z "$P" ] || [ "$P" = "auto" ]; then
+            CST_H=$(( ($(date -u +%H) + 8) % 24 ))
+            case "$CST_H" in 6) P=morning;; 12) P=noon;; 17) P=afternoon;; 21) P=evening;; *) P=morning;; esac
+          fi
+          echo "period=$P" >> $GITHUB_OUTPUT
+          echo "🌅 $P"
+
+      - name: 🧠 AI 新闻（v2.8·18源·10版块）
+        id: ai
+        continue-on-error: true
+        env:
+          AI_PROVIDER: ${{ env.AI_PROVIDER }}
+          AI_API_KEY: ${{ secrets.AI_API_KEY }}
+          AI_MODEL: ${{ env.AI_MODEL }}
+          AI_TEMP: ${{ env.AI_TEMP }}
+          AI_MAX_TOKENS: ${{ env.AI_MAX_TOKENS }}
+          AI_BASE_URL: ${{ secrets.AI_BASE_URL }}
+          WEATHER_LAT: ${{ env.WEATHER_LAT }}
+          WEATHER_LON: ${{ env.WEATHER_LON }}
+        run: |
+          node scripts/fetch-news-ai.js \
+            --period=${{ steps.period.outputs.period }} \
+            --output=data/${{ steps.period.outputs.period }}-latest.json
+
+      - name: 📰 热榜降级
+        if: steps.ai.outcome != 'success'
+        run: node scripts/fetch-cn-news.js --output=data/${{ steps.period.outputs.period }}-latest.json
+
+      - name: 🎨 HTML 邮件
+        run: |
+          node scripts/gen-html.js \
+            --data-file=data/${{ steps.period.outputs.period }}-latest.json \
+            --output=data/${{ steps.period.outputs.period }}-email.html
+
+      - name: 📮 发送
+        if: ${{ inputs.preview != 'true' }}
+        env:
+          MAIL_PROVIDER: ${{ env.MAIL_PROVIDER }}
+          MAIL_USER: ${{ secrets.MAIL_USER || secrets.SMTP_USER }}
+          MAIL_PASS: ${{ secrets.MAIL_PASS || secrets.SMTP_PASS }}
+          MAIL_FROM: ${{ secrets.MAIL_USER || secrets.SMTP_USER }}
+          MAIL_TO: ${{ vars.MAIL_TO || secrets.EMAIL_TO }}
+          MAIL_API_KEY: ${{ secrets.MAIL_API_KEY }}
+        run: |
+          case "${{ steps.period.outputs.period }}" in
+            morning)   T="早报";; noon) T="午报";; afternoon) T="傍晚速递";; evening) T="夜间总结";; *) T="特刊";;
+          esac
+          node scripts/mail-provider.js --send --subject="✨ LumaPost · 光影邮报 · $T（v2.8）" --body-file=data/${{ steps.period.outputs.period }}-email.html
+
+      - name: 💾 保存
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: lumapost-data-${{ steps.period.outputs.period }}
+          path: data/*.json
+          retention-days: 7
