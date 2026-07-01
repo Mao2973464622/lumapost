@@ -7,7 +7,7 @@
  *   2. 4 组 × 4 版块分组调用 AI（避免单次大调用失败）
  *   3. 两批并行（批内串行）提升速度
  *   4. 正确解析 Sina GBK 编码的股市数据
- *   5. 多信息源抓取（热榜 API + AIbase + AI-Bot + 猫目）
+ *   5. 多信息源抓取（热榜 API + AIbase + AI-Bot + 猫目 + CNMO科技 + IT之家 + 数码闲聊站）
  *   6. 每版块无条数上限，有多少写多少
  *
  * 用法：
@@ -236,6 +236,87 @@ const EXTRA_SOURCES = [
         while ((m = aiRe.exec(html)) !== null && items.length < 25) {
           items.push({ raw_title: m[1].trim(), url: m[2], source: '猫目' });
         }
+      }
+      return items;
+    }
+  },
+  // ── CNMO 科技（手机·汽车·AI·互联网，今日最新）──
+  { name: 'CNMO科技', url: 'https://www.cnmo.com/news/',
+    extract: (html) => {
+      const items = [];
+      // CNMO 新闻卡片: href="(http://...cnmo.com/...)" 中间有标题文本
+      const re = /href="(https?:\/\/(?:phone|internet|smartcar|ai|tech|notebook)\.cnmo\.com\/[^"]+)"[^>]*>\s*([^<]{10,200})\s*</gi;
+      let m;
+      while ((m = re.exec(html)) !== null && items.length < 30) {
+        let title = m[2].replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim();
+        // 去重标题前缀
+        title = title.replace(/^【CNMO科技消息】/, '').replace(/^据CNMO科技[^，]*[，,]/, '').trim();
+        if (title.length > 8 && !title.includes('CNMO科技') && !title.includes('数据来源') && !items.some(i => i.raw_title === title)) {
+          items.push({ raw_title: title, url: m[1], source: 'CNMO科技' });
+        }
+      }
+      return items;
+    }
+  },
+  // ── IT之家（直接爬取最新文章，比热榜 API 更新鲜）──
+  { name: 'IT之家', url: 'https://www.ithome.com/list/',
+    extract: (html) => {
+      const items = [];
+      // IT之家列表页: <a href="https://www.ithome.com/0/xxx/xxx.htm" target="_blank">标题</a>
+      const re = /href="(https?:\/\/www\.ithome\.com\/\d+\/\d+\/\d+\.htm)"[^>]*>([^<]{10,200})<\/a>/gi;
+      let m;
+      while ((m = re.exec(html)) !== null && items.length < 30) {
+        const title = m[2].replace(/<[^>]+>/g, '').trim();
+        if (title.length > 8 && !title.includes('广告')) {
+          items.push({ raw_title: title, url: m[1], source: 'IT之家' });
+        }
+      }
+      // 备用：uapis ithome 热榜已有基础数据，这里作为补充
+      if (items.length < 5) {
+        const altRe = /<h2[^>]*>\s*<a[^>]*href="(https?:\/\/www\.ithome\.com[^"]+)"[^>]*>([^<]+)<\/a>/gi;
+        while ((m = altRe.exec(html)) !== null && items.length < 25) {
+          const t = m[2].trim();
+          if (t.length > 8) items.push({ raw_title: t, url: m[1], source: 'IT之家' });
+        }
+      }
+      return items;
+    }
+  },
+  // ── 数码闲聊站（Weibo 实时爆料 + 百度新闻聚合）──
+  { name: '数码闲聊站', url: null,
+    fetch: async () => {
+      const items = [];
+      // 方式1: 百度搜索数码闲聊站最新爆料
+      try {
+        const r = await fetch('https://www.baidu.com/s?wd=%E6%95%B0%E7%A0%81%E9%97%B2%E8%81%8A%E7%AB%99+%E6%9C%80%E6%96%B0%E7%88%86%E6%96%99&rn=20&tn=json',
+          { headers: { 'User-Agent': 'Mozilla/5.0' }, signal: AbortSignal.timeout(10000) });
+        const html = await r.text();
+        // 百度搜索结果
+        const re = /"title":"([^"]{10,200})"[^}]*"url":"(https?:\/\/[^"]+)"/gi;
+        let m;
+        while ((m = re.exec(html)) !== null && items.length < 15) {
+          const title = m[1].replace(/\\"/g, '"').replace(/<[^>]+>/g, '').trim();
+          const url = m[2].replace(/\\\//g, '/');
+          if ((title.includes('数码') || title.includes('爆料') || title.includes('新机') || title.includes('芯片') || title.includes('手机')) && title.length > 8) {
+            items.push({ raw_title: title, url, source: '数码闲聊站' });
+          }
+        }
+      } catch(e) { /* silent */ }
+      // 方式2: 中文搜索引擎聚合
+      if (items.length < 3) {
+        try {
+          const r2 = await fetch('https://www.sogou.com/web?query=数码闲聊站+爆料+2026',
+            { headers: { 'User-Agent': 'Mozilla/5.0' }, signal: AbortSignal.timeout(8000) });
+          const html2 = await r2.text();
+          const re2 = /<a[^>]*href="(https?:\/\/[^"]+)"[^>]*>([^<]{10,150})<\/a>/gi;
+          let m2;
+          while ((m2 = re2.exec(html2)) !== null && items.length < 12) {
+            const t = m2[2].replace(/<[^>]+>/g, '').trim();
+            if ((t.includes('数码') || t.includes('手机') || t.includes('芯片') || t.includes('新机')) && t.length > 8) {
+              items.push({ raw_title: t, url: m2[1], source: '数码闲聊站' });
+            }
+          }
+        } catch(e) { /* silent */ }
       }
       return items;
     }
