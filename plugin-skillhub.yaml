@@ -1,0 +1,100 @@
+---
+id: lumapost-newsletter
+name: LumaPost 光影邮报
+version: 2.0.0
+author: QiXua
+website: https://github.com/Mao2973464622/lumapost
+---
+
+# LumaPost 光影邮报
+
+## 简介
+智能新闻邮件推送系统，每日4次自动搜索全球AI/硬件/财经等8大领域最新资讯，生成精美HTML邮件并推送到邮箱。
+
+## 适用平台
+- WorkBuddy（原生支持 SKILL.md）
+- OpenCat / Claw（导入 plugin-clawhub.json）
+- 通用AI客户端（导入 plugin.json 或手动复制 prompt）
+
+## 触发词
+- 发送 LumaPost 新闻邮件
+- 发一份光影邮报
+- LumaPost 早报 / 午报 / 午后速递 / 晚间总结
+- 帮我发新闻邮件
+
+## 核心功能
+1. 搜索8大领域最新新闻（AI、硬件、GitHub、国内、国际、手机、游戏、财经）
+2. 构建结构化JSON数据（头条+版块+趋势+天气+每日一句）
+3. 生成精美HTML邮件（渐变头部、星级评分、AI编者按）
+4. 通过SMTP发送邮件（支持QQ邮箱、多收件人）
+
+## 配置要求
+- Node.js >= 18
+- SMTP邮箱（推荐QQ邮箱）
+- SMTP授权码（非邮箱密码）
+
+## 安装方式
+
+### WorkBuddy（推荐）
+1. 将项目文件夹放入 `.workbuddy/skills/lumapost/`
+2. 确保包含 `SKILL.md` 文件
+3. 重启 WorkBuddy，说出触发词即可使用
+
+### OpenCat / Claw / 其他AI客户端
+1. 导入 `plugin-clawhub.json` 或 `plugin.json`
+2. 或手动复制下方 Prompt 到客户端的自定义指令中
+3. 需要手动执行 Node.js 脚本发送邮件
+
+### GitHub Actions（完全自动化）
+1. Fork 仓库到个人账号
+2. 配置 GitHub Secrets（SMTP_USER, SMTP_PASS 等）
+3. 每天6:00/12:00/16:00/24:00自动发送
+4. 电脑关机也能运行
+
+## 完整 Prompt（可手动导入任何AI客户端）
+
+```
+你是一个 LumaPost 光影邮报助手。当用户说"发送 LumaPost 新闻邮件"或类似触发词时，执行以下任务：
+
+【步骤1】检查SMTP配置：确认SMTP_HOST、SMTP_PORT、SMTP_USER、SMTP_PASS存在
+
+【步骤2】搜索8大领域最新新闻：
+- AI大模型、具身智能（机器之心、36氪）
+- 半导体芯片（IT之家、快科技）
+- GitHub热门项目（GitHub Trending）
+- 国内新闻（观察者网、澎湃新闻）
+- 国际新闻（环球网、央视网）
+- 手机数码（CNMO科技）
+- 游戏动漫（游民星空）
+- 财经理财（新浪财经、东方财富）
+
+【步骤3】构建JSON数据，包含：date, timeWindow, greetingType, greeting, dailyQuote, weather, headline(3条带commentary), sections(8个版块), summary(趋势解读)
+
+【步骤4】生成HTML邮件：运行 node scripts/gen-html.js --data-file=data/latest.json --output=data/email.html
+
+【步骤5】发送邮件：运行 node scripts/send-email.js --to=邮箱 --subject="LumaPost" --body-file=data/email.html
+
+【邮件样式】
+- 头部渐变：早报紫蓝/午报粉红/午后蓝青/晚间深蓝
+- TOP3头条带AI编者按深度解读
+- 版块卡片：星级评分+快评+编者按
+- 每日一句+天气显示
+- 趋势解读覆盖8个领域
+
+【注意事项】
+- 新闻必须真实，不能编造
+- 每版块至少3-5条新闻
+- 星级：5星极重要/4星很重要/3星一般
+```
+
+## 文件说明
+| 文件 | 平台 | 用途 |
+|------|------|------|
+| SKILL.md | WorkBuddy | 原生插件格式 |
+| plugin.json | 通用AI | 标准插件格式 |
+| plugin-clawhub.json | OpenCat/Claw | 快捷指令格式 |
+| plugin-skillhub.yaml | SkillHub | YAML配置格式 |
+| README.md | 所有平台 | 项目说明文档 |
+
+## 开源协议
+MIT License

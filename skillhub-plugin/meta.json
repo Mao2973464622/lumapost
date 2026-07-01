@@ -1,0 +1,18 @@
+{
+  "id": "lumapost-newsletter",
+  "version": "2.0.0",
+  "name": "LumaPost 光影邮报",
+  "description": "智能新闻邮件推送系统，每日4次自动搜索全球AI/硬件/财经等8大领域最新资讯，生成精美HTML邮件并推送到邮箱。支持GitHub Actions云端部署。",
+  "author": "QiXua",
+  "category": "news",
+  "tags": ["news", "email", "automation", "ai", "daily", "digest"],
+  "icon": "📰",
+  "color": "#6366f1",
+  "entry_point": "ima_api.js",
+  "requirement": {
+    "node_version": ">=18.0.0",
+    "dependencies": ["nodemailer", "ejs", "axios"]
+  },
+  "repository": "https://github.com/Mao2973464622/lumapost",
+  "license": "MIT"
+}

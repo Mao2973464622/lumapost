@@ -1,0 +1,91 @@
+{
+  "description": "LumaPost JSON数据格式示例 - 用于参考和模板",
+  "structure": {
+    "date": "2026年6月29日",
+    "timeWindow": "过去12小时",
+    "greetingType": "morning / noon / afternoon / evening",
+    "greeting": "问候语（按时段不同）",
+    "dailyQuote": "每日一句名言",
+    "weather": {
+      "location": "城市名称",
+      "text": "天气图标+描述",
+      "temp": "温度°C"
+    },
+    "headline": [
+      {
+        "title": "头条标题（30字以内）",
+        "summary": "新闻摘要50-100字",
+        "commentary": "AI编者按深度解读100-200字",
+        "source": "来源媒体",
+        "time": "2026-06-29",
+        "url": "https://example.com",
+        "verified": true
+      }
+    ],
+    "sections": [
+      {
+        "name": "🤖 AI · 机器人",
+        "colorKey": "ai",
+        "items": [
+          {
+            "title": "新闻标题",
+            "summary": "摘要",
+            "quicknote": "一句话短评",
+            "commentary": "深度解读（可选）",
+            "source": "来源",
+            "time": "2026-06-29",
+            "url": "https://...",
+            "stars": 4,
+            "verified": true
+          }
+        ]
+      }
+    ],
+    "summary": [
+      {
+        "category": "🤖 AI",
+        "trend": "一句话看懂趋势",
+        "detail": "详细分析80-150字"
+      }
+    ]
+  },
+  "greetingTypes": {
+    "morning": {
+      "timeRange": "05:00-11:00",
+      "gradient": "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
+      "greeting": "清晨好！新的一天，从一份光影邮报开始~"
+    },
+    "noon": {
+      "timeRange": "11:00-14:00",
+      "gradient": "linear-gradient(135deg, #f093fb 0%, #f5576c 100%)",
+      "greeting": "午间好！短暂休整，资讯补给~"
+    },
+    "afternoon": {
+      "timeRange": "14:00-19:00",
+      "gradient": "linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)",
+      "greeting": "下午好！工作间隙，速览要闻~"
+    },
+    "evening": {
+      "timeRange": "19:00-24:00",
+      "gradient": "linear-gradient(135deg, #1e3c72 0%, #2a5298 100%)",
+      "greeting": "晚上好！一天的收获，尽在光影邮报~"
+    }
+  },
+  "colorKeys": {
+    "ai": "#6366f1",
+    "hardware": "#8b5cf6",
+    "github": "#f59e0b",
+    "domestic": "#10b981",
+    "international": "#3b82f6",
+    "mobile": "#ec4899",
+    "games": "#f97316",
+    "finance": "#14b8a6"
+  },
+  "starRatings": {
+    "5": "极重要 - 行业重大变革/重大突破",
+    "4": "很重要 - 重要产品发布/重要政策",
+    "3": "一般重要 - 常规更新/行业动态",
+    "2": "参考 - 相关新闻/周边信息",
+    "1": "了解 - 补充阅读"
+  }
+}

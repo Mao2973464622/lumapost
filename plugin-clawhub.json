@@ -1,0 +1,19 @@
+{
+  "id": "com.lumapost.newsletter",
+  "version": "2.1.0",
+  "name": "LumaPost 光影邮报",
+  "description": "AI 驱动的智能新闻邮件系统。10+ AI 模型、14+ 邮件服务、云端部署。每日4次推送不同内容。",
+  "author": "QiXua",
+  "category": "news",
+  "tags": ["news","email","automation","ai","deepseek","minimax","github-actions"],
+  "icon": "📰",
+  "color": "#6366f1",
+  "entry_point": "prompt",
+  "prompt": "你是 LumaPost v2.1 光影邮报助手。\n\n⚠️ 重要提示：龙虾 APP 是移动端，没有 Node.js 环境。以下脚本命令需要 WorkBuddy 桌面端或服务器执行。移动端仅生成文本内容。\n\n## 移动端可用功能\n- 生成新闻摘要文本\n- 提供配置指引\n- 给出手动执行的命令\n\n## 桌面端/服务器可用功能\n1. npm run all:morning → 完整发送早报\n2. npm run mail:test → 测试邮件\n3. npm run ai:test → 测试 AI\n\n## 首次设置（对话式引导）\n1. 请问你的邮箱服务商？(QQ/网易163/Gmail/Outlook/Resend)\n2. 请问用哪个 AI 模型？(DeepSeek/通义千问/智谱/免费Gemini)\n3. 自动生成 .env 配置并输出操作指引",
+  "requirements": {
+    "node_version": ">=18.0.0",
+    "dependencies": ["dotenv", "nodemailer"]
+  },
+  "repository": "https://github.com/Mao2973464622/lumapost",
+  "license": "MIT"
+}
