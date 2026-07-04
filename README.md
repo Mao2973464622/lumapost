@@ -1,139 +1,137 @@
-# LumaPost - 光影邮报 🌟
+# LumaPost — 光影邮报 🌟
 
-> 📰 **智能个性化新闻摘要系统** · 每日4次自动抓取全球资讯 · AI深度解读 · 精美HTML邮件推送
+> **智能个性化新闻摘要系统** · 每日 4 次自动抓取全球资讯 · AI 深度解读 · 精美 HTML 邮件推送
+
+[![Version](https://img.shields.io/badge/v3.0.0-blue)](https://github.com/Mao2973464622/lumapost)
+[![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
+[![Node](https://img.shields.io/badge/node-%3E%3D18-339933)](https://nodejs.org)
+[![GitHub Actions](https://img.shields.io/github/actions/workflow/status/Mao2973464622/lumapost/LumaPost%20Email?label=email)](https://github.com/Mao2973464622/lumapost/actions)
 
 ---
 
-## ✨ 效果预览
+## ✨ 功能亮点
 
-邮件样式参考：[LumaPost 午报 PDF 示例](https://github.com/Mao2973464622/lumapost)
-
-**邮件包含：**
-- 🎨 渐变头部（按时段不同配色：早=紫蓝 / 午=粉红 / 午后=蓝青 / 晚=深蓝）
-- 🔥 TOP 3 头条新闻（带 AI 编者按深度解读）
-- 📦 10 大版块新闻卡片（星级评分 + 快评 + 编者按）
-- 📈 今日趋势深度解读
-- 💬 每日一句（励志/财经/人生哲理）
-- 📧 专业页脚
+- 🤖 **AI 驱动** — 支持 10+ AI 模型（DeepSeek / OpenAI / Claude / 通义千问 / 智谱 / 豆包 / Kimi 等）
+- 📊 **10 大版块** — AI·硬件·开源·国内外新闻·游戏·财经·汽车·互联网·生活·科学
+- 🌤 **实时天气** — 邮件头部显示当前天气（Open-Meteo，免费无需 Key）
+- 💬 **AI 深度解读** — 每条新闻附 AI 编者按，理财版块含「人话版 + 专业原话」双解读
+- 🎨 **精美 HTML 邮件** — 渐变头部、星级评分、卡片布局，按时段自动换色
+- 🔄 **降级容错** — AI 抓取失败时自动切换热榜数据源，确保每日有内容
+- ☁️ **云端运行** — GitHub Actions 部署后，电脑关机也能按时发邮件
+- 🐳 **多部署方式** — 支持 GitHub Actions / Docker / systemd / crontab / WorkBuddy 自动化
 
 ---
 
 ## 🚀 快速开始
 
-### 1️⃣ 配置
-
-复制环境变量模板并填入你的配置：
+### 1. 配置环境变量
 
 ```bash
 cp .env.example .env
 ```
 
-编辑 `.env`：
+编辑 `.env`，填入你的配置：
 
 ```bash
-# 邮件配置（必填）
+# ── AI 模型（必填）─────────────────────────
+AI_PROVIDER=deepseek
+AI_API_KEY=sk-your-key-here
+
+# ── 邮件发送（必填）───────────────────────
 MAIL_PROVIDER=qq
 MAIL_USER=your_email@qq.com
-MAIL_PASS=your_smtp_auth_code   # QQ邮箱的SMTP授权码，不是密码！
-MAIL_TO=recipient_email@qq.com
+MAIL_PASS=your_smtp_auth_code   # QQ邮箱SMTP授权码，不是密码！
 
-# 天气配置（可选，邮件头部显示天气）
-WEATHER_CITY=湖南
-
-# 日志
-LOG_DIR=./logs
+# ── 天气位置（可选，默认长沙）─────────────
+WEATHER_LAT=28.20
+WEATHER_LON=112.97
 ```
 
-> **获取QQ邮箱SMTP授权码：** 登录QQ邮箱 → 设置 → 账户 → POP3/IMAP/SMTP服务 → 开启 → 生成授权码
+> **获取 QQ 邮箱 SMTP 授权码：** 登录 QQ 邮箱 → 设置 → 账户 → 开启 POP3/SMTP → 生成授权码
 
-### 2️⃣ 安装依赖
+### 2. 安装依赖
 
 ```bash
 npm install
 ```
 
-### 3️⃣ 测试邮件发送
-
-用真实新闻数据测试完整流程：
+### 3. 测试
 
 ```bash
-# 第1步：抓取新闻并生成HTML
+# 测试 AI 配置
+node scripts/ai-provider.js --test
+
+# 测试邮件发送
+node scripts/mail-provider.js --test
+
+# 完整流程测试（抓取 → 生成 → 发送）
 npm run all:morning
-
-# 第2步：发送邮件
-npm run send:test
 ```
 
-收到邮件说明配置正确！
+收到邮件说明一切正常！
 
 ---
 
-## ⏰ 定时自动推送（核心功能）
+## ⏰ 定时推送
 
-### 方式一：WorkBuddy 自动化（推荐 ✅）
+### 方式一：GitHub Actions（推荐 ✅）
 
-本项目已配置好 4 个 WorkBuddy 自动化任务，到时间 AI 会自动：
-1. 搜索最新新闻（WebSearch）
-2. 构建 JSON 数据
-3. 生成 HTML 邮件
-4. 通过 SMTP 发送
+**完全云端运行，电脑关机也能发。** 适合大多数人。
 
-| 时间 | 任务 | 内容侧重 |
-|------|------|----------|
-| 06:00 | 早报 | 昨夜至今早重要新闻 |
-| 12:00 | 午报 | 上午最新动态 |
-| 17:30 | 午后速递 | 下午时段新闻 |
-| 21:00 | 晚间总结 | 全天回顾总结 |
+1. Fork 或推送此仓库到 GitHub
+2. 在仓库 **Settings → Secrets and variables → Actions** 中设置：
+   - **Secrets**（敏感信息）：`AI_API_KEY`、`MAIL_USER`、`MAIL_PASS`
+   - **Variables**（非敏感）：`AI_PROVIDER`、`AI_MODEL`、`MAIL_PROVIDER`、`WEATHER_LAT`、`WEATHER_LON`
+3. 启用 Actions：仓库 **Actions** 标签页 → 左侧 `LumaPost Email` → Enable workflow
+4. 可手动触发：Actions → `LumaPost Email` → `Run workflow`
 
-**启动自动化：**
-在 WorkBuddy 中执行：
-```
-/automation list
-```
-查看是否已有这 4 个任务，状态应为 `ACTIVE`。
+| 中国时间 | UTC 时间 | 内容侧重 |
+|----------|-----------|----------|
+| 06:00 早报 | 22:00 UTC | 隔夜国际大事、美股收盘 |
+| 12:00 午报 | 04:00 UTC | 上午 A 股行情、企业动态 |
+| 17:30 午后速递 | 09:30 UTC | 下午突发事件、新品发布 |
+| 21:00 晚间总结 | 13:00 UTC | 全天复盘、欧美收盘 |
 
-**⚠️ 重要说明（关于电脑关机）：**
+### 方式二：本地 crontab / systemd
 
-WorkBuddy 自动化任务的调度在**服务端**，但执行时需要：
-- WorkBuddy 桌面端**保持运行**（可最小化到托盘）
-- 电脑**不能关机**（或设置定时唤醒）
-
-如果想实现**完全云端运行**（电脑关机也能发邮件），需要把项目部署到云服务器，然后配置系统 crontab。详见下方「部署到云服务器」章节。
-
-### 方式二：系统 crontab（云端部署用）
-
-将项目部署到云服务器后，配置 crontab：
+适合有云服务器的用户：
 
 ```bash
-crontab -e
+# crontab（每天 4 次）
+0 6,12,17,21 * * * cd /path/to/lumapost && npm run all:morning >> logs/cron.log 2>&1
 ```
 
-添加：
+或使用 systemd timer（详见 `lumapost.service` 文件注释）。
+
+### 方式三：Docker
+
 ```bash
-# 早报 06:00
-0 6 * * * cd /path/to/lumapost && npm run all:morning >> logs/morning.log 2>&1
+# 构建
+docker build -t lumapost .
 
-# 午报 12:00
-0 12 * * * cd /path/to/lumapost && npm run all:noon >> logs/noon.log 2>&1
-
-# 午后速递 17:30
-30 17 * * * cd /path/to/lumapost && npm run all:afternoon >> logs/afternoon.log 2>&1
-
-# 晚间总结 21:00
-0 21 * * * cd /path/to/lumapost && npm run all:evening >> logs/evening.log 2>&1
+# 运行（需传入环境变量）
+docker run --rm \
+  -e AI_API_KEY=sk-xxx \
+  -e MAIL_USER=xxx@qq.com \
+  -e MAIL_PASS=xxx \
+  lumapost npm run all:morning
 ```
+
+### 方式四：WorkBuddy 自动化
+
+在 WorkBuddy 中配置 4 个定时自动化任务，到时间 AI 自动执行完整流程。
 
 ---
 
-## 📦 邮件版块说明
+## 📋 邮件版块
 
-每封邮件包含以下 10 个版块（自动生成，无需手动维护）：
+每封邮件包含 10 个版块（AI 自动生成，无需手动维护）：
 
-| 版块 | 内容 | 信息源 |
+| 版块 | 内容 | 数据源 |
 |------|------|--------|
-| 🤖 AI · 智能体 | AI大模型、Agent、具身智能 | 机器之心、36氪、腾讯云 |
+| 🤖 AI · 智能体 | AI 大模型、Agent、具身智能 | 机器之心、36氪、腾讯云 |
 | 💻 硬件 · 数码 | 半导体、手机、消费电子 | IT之家、快科技、CNMO |
-| 🌍 全球创意 · 开源 | GitHub热门开源项目 | GitHub Trending、掘金 |
+| 🌍 全球创意 · 开源 | GitHub 热门开源项目 | GitHub Trending、掘金 |
 | 📰 国内外新闻 | 国内外重要新闻、社会热点 | 观察者网、澎湃、环球网 |
 | 🎮 游戏 · 动漫 | 游戏、动漫、新番 | 游民星空、B站 |
 | 💰 理财 · 财经 | A股、财经、理财知识 | 新浪财经、东方财富、雪球 |
@@ -142,44 +140,105 @@ crontab -e
 | 🎬 影视 · 生活 · 科技 | 影视、体育、生活 | 猫眼、少数派、V2EX |
 | 🔬 科学 · 航天 · 健康 | 航天、黑科技、医疗 | 果壳、丁香园、NASA |
 
-**理财版块特色：** 每条新闻附「人话版 + 专业原话」双解读。
+> 💡 理财版块特色：每条新闻附「人话版 + 专业原话」双解读。
 
 ---
 
-## 🔧 命令行工具
+## 🤖 支持的 AI 模型
+
+在 `.env` 中设置 `AI_PROVIDER` 切换模型：
+
+| 提供商 | `AI_PROVIDER` 值 | 默认模型 | 获取地址 |
+|--------|-------------------|----------|----------|
+| DeepSeek | `deepseek` | deepseek-chat | https://platform.deepseek.com |
+| MiniMax | `minimax` | MiniMax-Text-01 | https://www.minimaxi.com |
+| OpenAI | `openai` | gpt-4o | https://platform.openai.com |
+| Claude | `anthropic` | claude-sonnet-4 | https://console.anthropic.com |
+| 通义千问 | `qwen` | qwen-turbo | https://dashscope.aliyun.com |
+| 智谱 GLM | `zhipu` | glm-4-flash | https://open.bigmodel.cn |
+| 字节豆包 | `doubao` | doubao-pro-32k | https://www.volcengine.com |
+| Kimi | `kimi` | moonshot-v1-8k | https://platform.moonshot.cn |
+| 自定义 | `custom` | — | 任何 OpenAI 兼容接口 |
+
+测试 AI 配置：`node scripts/ai-provider.js --test`
+
+---
+
+## 📮 支持的邮件服务
+
+在 `.env` 中设置 `MAIL_PROVIDER` 切换邮件服务商：
+
+| 服务商 | `MAIL_PROVIDER` 值 | 认证方式 |
+|--------|---------------------|----------|
+| QQ 邮箱 | `qq` | SMTP 授权码 |
+| 网易 163 | `netease` | SMTP 授权码 |
+| 网易 126 | `netease-126` | SMTP 授权码 |
+| Yeah 邮箱 | `netease-yeah` | SMTP 授权码 |
+| Gmail | `gmail` | 应用专用密码 |
+| Outlook | `outlook` | 账户密码 / 应用密码 |
+| 阿里云邮件 | `aliyun` | SMTP 授权码 |
+| Resend | `resend` | API Key |
+| SendGrid | `sendgrid` | API Key |
+| Mailgun | `mailgun` | API Key |
+| Postmark | `postmark` | API Key |
+| 自定义 SMTP | `custom-smtp` | 自定义主机/端口 |
+| Microsoft Graph | `graph` | OAuth2 |
+
+测试邮件配置：`node scripts/mail-provider.js --test`
+
+---
+
+## 🛠️ 命令行工具
+
+### 抓取新闻
+
+```bash
+# AI 驱动抓取（推荐）
+node scripts/fetch-news-ai.js --period=morning --output=data/morning-latest.json
+
+# 热榜降级模式（AI 失败时的备用方案）
+node scripts/fetch-cn-news.js --output=data/morning-latest.json
+```
+
+`--period` 取值：`morning` / `noon` / `afternoon` / `evening`
 
 ### 生成 HTML 邮件
 
 ```bash
-node scripts/gen-html.js --data-file=<JSON数据文件> --output=<输出HTML文件>
-```
-
-示例：
-```bash
-node scripts/gen-html.js --data-file data/morning-latest.json --output data/morning-email.html
+node scripts/gen-html.js \
+  --data-file=data/morning-latest.json \
+  --output=data/morning-email.html
 ```
 
 ### 发送邮件
 
 ```bash
-node scripts/mail-provider.js --send --to=<收件人> --subject=<主题> --body-file=<HTML文件>
+node scripts/mail-provider.js \
+  --send \
+  --subject="✨ LumaPost · 光影邮报 · 早报" \
+  --body-file=data/morning-email.html
 ```
 
-也可用环境变量传邮件配置（推荐）：
-```bash
-MAIL_PROVIDER=qq MAIL_USER=xxx@qq.com MAIL_PASS=xxx \
-  node scripts/mail-provider.js --send --to=xxx@qq.com --subject="标题" --body-file=email.html
-```
+### npm scripts 快捷命令
+
+| 命令 | 说明 |
+|------|------|
+| `npm run all:morning` | 抓取 + 生成 + 发送（早报） |
+| `npm run all:noon` | 抓取 + 生成 + 发送（午报） |
+| `npm run all:afternoon` | 抓取 + 生成 + 发送（午后） |
+| `npm run all:evening` | 抓取 + 生成 + 发送（晚间） |
+| `npm run ai:test` | 测试 AI 配置 |
+| `npm run mail:test` | 测试邮件配置 |
 
 ---
 
 ## 📊 JSON 数据格式
 
-`gen-html.js` 接受的 JSON 格式：
+`gen-html.js` 接受的 JSON 格式（AI 自动生成，无需手动编写）：
 
 ```json
 {
-  "date": "2026年6月29日",
+  "date": "2026年7月4日",
   "timeWindow": "过去12小时",
   "greetingType": "morning",
   "greeting": "早安！新的一天从光影邮报开始~",
@@ -192,29 +251,25 @@ MAIL_PROVIDER=qq MAIL_USER=xxx@qq.com MAIL_PASS=xxx \
   "headline": [
     {
       "title": "头条标题",
-      "summary": "新闻摘要（50-100字）",
-      "commentary": "AI编辑深度解读（100-200字）",
+      "summary": "新闻摘要",
+      "commentary": "AI 深度解读",
       "source": "来源媒体",
-      "time": "2026-06-29",
-      "url": "https://example.com/news/1",
-      "verified": true
+      "url": "https://example.com/news/1"
     }
   ],
   "sections": [
     {
-      "name": "🤖 AI · 机器人",
+      "name": "🤖 AI · 智能体",
       "colorKey": "ai",
       "items": [
         {
           "title": "新闻标题",
           "summary": "摘要",
           "quicknote": "一句话短评",
-          "commentary": "深度解读（可选）",
+          "commentary": "深度解读",
           "source": "来源",
-          "time": "2026-06-29",
           "url": "链接",
-          "stars": 4,
-          "verified": true
+          "stars": 4
         }
       ]
     }
@@ -222,111 +277,14 @@ MAIL_PROVIDER=qq MAIL_USER=xxx@qq.com MAIL_PASS=xxx \
   "summary": [
     {
       "category": "🤖 AI",
-      "trend": "一句话看懂趋势",
-      "detail": "详细分析（80-150字）"
+      "trend": "趋势一句话",
+      "detail": "详细分析"
     }
   ]
 }
 ```
 
-**`greetingType` 取值：** `morning` / `noon` / `afternoon` / `evening`（影响头部配色）
-
-**`colorKey` 取值：** `ai` / `hardware` / `github` / `domestic` / `games` / `finance` / `auto` / `internet` / `movie` / `space`
-
-**星级说明：** ★★★★★ 极重要 / ★★★★ 很重要 / ★★★ 一般重要
-
----
-
-## 🖥️ 运行环境说明
-
-### Windows 本地运行
-
-- **不需要开 IDE 或 VS Code**
-- 只需要 **WorkBuddy 桌面端保持运行**（可最小化到托盘）
-- 自动化任务由 WorkBuddy 后台 Agent 执行
-- **电脑关机 = 任务不执行**（本地脚本无法在关机状态运行）
-
-### 云端部署（推荐用于生产）
-
-部署到云服务器（阿里云/腾讯云/AWS）后：
-1. 用系统 crontab 代替 WorkBuddy 自动化
-2. 24/7 运行，不受本地电脑开关机影响
-3. 详见下方「部署到云服务器」
-
----
-
-## 🌐 部署到云服务器
-
-### 步骤
-
-```bash
-# 1. 上传项目到服务器
-scp -r lumapost/ user@your-server:/home/user/lumapost/
-
-# 2. SSH登录服务器
-ssh user@your-server
-
-# 3. 安装 Node.js（推荐 v18+）
-curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
-sudo apt-get install -y nodejs
-
-# 4. 安装依赖
-cd /home/user/lumapost && npm install
-
-# 5. 配置 .env
-cp .env.example .env
-nano .env   # 填入SMTP配置
-
-# 6. 配置 crontab
-crontab -e
-# 添加4个定时任务（见上方「方式二」）
-
-# 7. 查看日志确认运行
-tail -f logs/morning.log
-```
-
----
-
-## ❓ 常见问题 (FAQ)
-
-### Q1: 电脑关机后定时任务还会执行吗？
-
-**A:** 取决于运行方式：
-- **WorkBuddy 自动化方式：** 需要电脑开机 + WorkBuddy 运行。关机=不执行。
-- **云服务器 crontab 方式：** 24/7 执行，不受本地电脑影响。✅ 推荐
-
-### Q2: 必须开 VS Code 或 IDE 吗？
-
-**A:** 不需要。WorkBuddy 自动化在后台运行，不需要任何 IDE。只要 WorkBuddy 桌面端开着就行。
-
-### Q3: SMTP 授权码和邮箱密码有什么区别？
-
-**A:** SMTP授权码是**专门用于第三方应用发邮件**的密码，不是邮箱登录密码。
-- QQ邮箱获取方式：邮箱设置 → 账户 → 开启POP3/SMTP → 生成授权码
-- 授权码长这样：`xxxxxxxxxxxxxxxx`（16位字母，在QQ邮箱后台生成）
-
-### Q4: 邮件收不到怎么办？
-
-**A:**
-1. 检查垃圾邮件箱（HTML邮件可能被误判）
-2. 检查 SMTP 配置是否正确（运行测试发送）
-3. 查看日志：`tail -f logs/morning.log`
-4. QQ邮箱可能需要将发件人加入白名单
-
-### Q5: 如何修改邮件样式？
-
-**A:**
-- 直接编辑 `scripts/gen-html.js` 中的 `generateHTML()` 函数
-- 样式为内联 CSS（邮件兼容性好）
-- 修改后重新运行 `gen-html.js` 生成预览
-
-### Q6: 新闻内容是真实的吗？
-
-**A:** 是的。自动化任务通过 WebSearch 实时搜索最新新闻，确保内容真实有效。每次发送的内容都不同。
-
-### Q7: 如何添加/删除版块？
-
-**A:** 编辑自动化任务的 prompt，在「第3步：构建JSON数据」部分修改 `sections` 数组。可以添加新的版块或删除不需要的版块。
+`colorKey` 取值：`ai` / `hardware` / `github` / `domestic` / `games` / `finance` / `auto` / `internet` / `movie` / `space`
 
 ---
 
@@ -334,42 +292,105 @@ tail -f logs/morning.log
 
 ```
 lumapost/
-├── .env                 # 环境变量配置（不提交）
-├── .env.example         # 环境变量模板
-├── package.json         # NPM配置
-├── README.md           # 本文件
+├── .env.example           # 环境变量模板（不提交真实值）
+├── package.json           # NPM 配置 + npm scripts
+├── Dockerfile            # Docker 构建文件
+├── docker-compose.yml    # Docker Compose 配置
+├── lumapost.service      # systemd 服务文件
+├── crontab.example       # crontab 配置示例
+├── ofelia.ini            # Ofelia 定时任务配置
 ├── scripts/
-│   ├── ai-provider.js    # 🤖 10+ AI 模型统一接口
-│   ├── mail-provider.js  # 📮 14+ 邮件服务统一接口
-│   ├── fetch-news-ai.js  # 🧠 AI 驱动的新闻抓取（核心）
-│   ├── fetch-cn-news.js  # 📊 热榜降级模式
-│   ├── gen-html.js       # 🎨 HTML 邮件生成
-│   └── send-email.js     # 旧版 SMTP 发送（已废弃）
-├── data/                # 每次运行生成的数据文件
-└── logs/                # 运行日志
+│   ├── ai-provider.js     # 🤖 AI 模型统一调用层（10+ 模型）
+│   ├── mail-provider.js   # 📮 邮件发送统一接口（14+ 服务商）
+│   ├── fetch-news-ai.js  # 📰 AI 驱动新闻抓取（核心，18 数据源）
+│   ├── fetch-cn-news.js  # 📡 热榜降级模式（免费备用）
+│   ├── gen-html.js        # 🎨 HTML 邮件生成
+│   └── send-email.js     # ⚠️ 旧版（已废弃，请用 mail-provider.js）
+├── .github/
+│   └── workflows/
+│       └── email.yml      # GitHub Actions 工作流
+└── data/                 # 运行时生成（.gitignore）
 ```
 
 ---
 
-## 🛠️ 技术栈
+## 🐳 Docker 部署
 
-| 类型 | 技术 |
-|------|------|
-| 运行环境 | Node.js 18+ |
-| 邮件发送 | nodemailer v7 (SMTP/SSL + HTTP API) |
-| HTTP请求 | Node.js 内置 http/https + fetch |
-| 天气API | Open-Meteo (免费，无需API Key) |
-| 新闻搜索 | WebSearch (AI工具) |
-| 自动化 | WorkBuddy Automation / 系统 crontab |
+```bash
+# 构建镜像
+docker build -t lumapost .
+
+# 一次性运行
+docker run --rm \
+  -e AI_PROVIDER=deepseek \
+  -e AI_API_KEY=sk-xxx \
+  -e MAIL_PROVIDER=qq \
+  -e MAIL_USER=xxx@qq.com \
+  -e MAIL_PASS=xxx \
+  lumapost npm run all:morning
+
+# 使用 docker-compose
+docker-compose up -d
+```
+
+---
+
+## ❓ 常见问题
+
+### Q: 电脑关机后定时任务还会执行吗？
+
+**A:** 取决于运行方式：
+- **GitHub Actions 方式：** ✅ 完全云端执行，电脑关机不影响
+- **本地 crontab / WorkBuddy 方式：** 需要电脑开机
+
+### Q: SMTP 授权码和邮箱密码有什么区别？
+
+**A:** SMTP 授权码是**专门用于第三方应用发邮件**的密码，不是邮箱登录密码。QQ 邮箱获取方式：邮箱设置 → 账户 → 开启 POP3/SMTP → 生成授权码
+
+### Q: 邮件收不到怎么办？
+
+**A:**
+1. 检查垃圾邮件箱（HTML 邮件可能被误判）
+2. 运行 `npm run mail:test` 测试发送
+3. 检查 `.env` 配置是否正确
+4. QQ 邮箱可能需要将发件人加入白名单
+
+### Q: 如何修改邮件样式？
+
+**A:** 直接编辑 `scripts/gen-html.js` 中的 `generateHTML()` 函数。样式为内联 CSS（邮件兼容性好）。修改后重新运行生成即可。
+
+### Q: 新闻内容是真实的吗？
+
+**A:** 是的。通过 AI 实时搜索最新新闻，确保内容真实有效。每次发送的内容都不同。
+
+### Q: 如何添加新的 AI 模型或邮件服务商？
+
+**A:**
+- 新 AI 模型：编辑 `scripts/ai-provider.js`，在 `PROVIDERS` 对象中添加配置
+- 新邮件服务商：编辑 `scripts/mail-provider.js`，在 `PROVIDERS` 对象中添加配置
 
 ---
 
 ## 🔒 安全注意事项
 
 1. **`.env` 文件包含密码，已加入 `.gitignore`，切勿提交到 Git**
-2. **SMTP授权码等同于密码，不要分享或明文存储**
-3. **定期更换SMTP授权码（QQ邮箱建议每年更换）**
-4. **如果使用GitHub Actions或云服务器，用 Secrets 管理敏感信息**
+2. **SMTP 授权码等同于密码，不要分享或明文存储**
+3. **如果使用 GitHub Actions，敏感信息务必存在 Secrets 中**
+4. **定期更换 SMTP 授权码（QQ 邮箱建议每年更换）**
+5. **`.env.example` 中的值均为占位符，不含真实凭证**
+
+---
+
+## 🔧 技术栈
+
+| 类型 | 技术 |
+|------|------|
+| 运行环境 | Node.js ≥ 18 |
+| AI 调用 | 10+ 模型统一接口（OpenAI 兼容协议） |
+| 邮件发送 | nodemailer v7（SMTP + HTTP API） |
+| HTTP 请求 | Node.js 内置 http/https + fetch |
+| 天气 API | Open-Meteo（免费，无需 API Key） |
+| 自动化 | GitHub Actions / systemd / crontab / Docker |
 
 ---
 
@@ -379,85 +400,46 @@ MIT License — 可自由使用、修改和分发。
 
 ---
 
-## 🔄 更新日志
+## 📝 更新日志
 
 ### v3.0 (2026-07-04)
 
 #### 🔒 安全修复
-- 清除 `.env.example`、`使用说明.md`、`README.md` 中泄露的真实凭证（SMTP授权码、API Key）
-- 所有示例值替换为占位符格式
+- 清除 `.env.example` 中的真实凭证（API Key、邮箱密码）
+- 所有示例值替换为占位符
 
 #### 🐛 Bug 修复（20+ 项）
-- **Dockerfile 路径错误**：COPY 路径去掉 `lumapost/` 前缀，Docker 部署可用
-- **chatJSON 重复消息**：修复 AI 消息重复发送导致的 token 浪费
-- **JSON 正则漏数组**：同时匹配 `{}` 和 `[]`
-- **锁不释放**：`main()` 改用 `try/finally` 确保异常时释放锁
-- **日期硬编码**：GitHub Trending 和搜狗搜索改为动态计算
-- **参数解析**：`gen-html.js` 和 `mail-provider.js` 的 `=` 解析修复
-- **httpJSON 无超时**：增加 30s 超时
-- **Mailgun JSON.parse 无保护**：增加 try/catch
-- **降级路径时间解析**：增加 Invalid Date 安全检查
-- **fetchJSON 无超时**：增加 AbortController 10s 超时
-- **热榜解析不完整**：增加 `data.data?.list` 回退
-- **天气硬编码**：降级模式也调用 Open-Meteo API
-- **`-f` 短选项冲突**：`--from` 改用 `-r`
-- **`esc` 缺少单引号转义**：增加 `&#39;`
-- **`JSON.parse` 无保护**：增加 try/catch + 友好错误提示
+- **ai-provider.js**：修复 `loadConfig` 缓存缺失、`chatJSON` 重复发送消息、JSON 正则匹配数组
+- **fetch-news-ai.js**：`try/finally` 确保锁释放、GitHub Trending 日期动态计算、降级路径安全解析
+- **gen-html.js**：`parseArgs` 彻底重写、`esc()` 添加单引号转义、`JSON.parse` 异常处理
+- **mail-provider.js**：参数解析修复、`httpJSON` 超时控制、`sendViaMailgun` 异常处理
+- **fetch-cn-news.js**：`AbortController` 超时控制、热榜解析回退、天气数据动态获取
+- **Dockerfile**：`COPY` 路径修正（修复 Docker 构建失败）
 
-#### ⚡ 性能优化
-- `loadConfig()` 增加模块级缓存，避免重复调用
+#### ⚡ 优化
+- `loadConfig()` 增加模块级缓存，避免重复读取
 - `send-email.js` 标记为 `@deprecated`，引导使用 `mail-provider.js`
+- nodemailer 升级至 v7.0.5
 
 #### 📋 统一化
-- 版本号统一为 `3.0.0`（package.json / Dockerfile / email.yml / 插件配置 / 文档）
-- 时间表统一为 `06:00 / 12:00 / 17:30 / 21:00`（ofelia.ini / crontab / email.yml / 文档）
-- GitHub Actions 时段检测改为范围匹配（不再仅匹配整点）
+- 版本号统一为 `3.0.0`（全项目）
+- 时间表统一为 `06:00 / 12:00 / 17:30 / 21:00`
 - 删除冗余文件：`WORKBUDDY_AUTOMATION_PROMPT.md`、`skillhub-plugin/` 目录
-- `nodemailer` 升级到 v7.0.5
 
 ### v2.9 (2026-07-01)
+- 新增 18 信息源（微博热搜、知乎热榜、抖音热榜、B站热榜等）
+- 10 大版块合并优化（原 16 版块 → 10 版块）
+- AI 深度解读（`commentary` 字段）
+- 相对时间显示（"刚刚/3分钟前/2小时前"）
 
-#### ✨ 新增
-- 🔥 **18 信息源**：新增微博热搜、知乎热榜、抖音热榜、B站热榜、猫目资讯等热榜API接入（uapis.cn 15平台）
-- 🌐 **猫目资讯**：新增 HTML 爬虫信息源，覆盖更多中文媒体
-- 📊 **10 大版块**：将原 16 版块合并优化为 10 个（AI·硬件·开源·新闻·游戏·财经·汽车·互联网·生活·太空），去重减少冗余
-- 💬 **AI 深度解读**：每条新闻新增 `commentary` 字段，由 LLM 生成 100-200 字真实分析（非模板）
-
-#### 🎨 优化
-- 🕐 **相对时间**：时间显示改为"刚刚/3分钟前/2小时前/1天前"等直观格式
-- 📋 **双列目录**：TOC 改为紧凑双列布局，减少滚动
-- 📱 **卡片分隔**：新闻卡片间增加 2px 分隔线，提升边界感
-- 📝 **摘要样式**：摘要文字改为灰色背景框，AI 解读更突出
-- 🔄 **串行抓取**：热榜抓取改为串行（300ms 间隔），避免 429 限流
-
-#### 🐛 修复
-- 修复 UTF-8 中文乱码（用 `Buffer.concat` 替代 `data += chunk`）
-- 修复 uapis.cn API 字段映射（`hot_value` → `hot`，`extra.desc` → `raw_desc`）
-- 修复 xueqiu API 404（移除雪球源，替换为 B站）
-- 修复定时任务名称未随版本更新
+### v2.0 (2026-06-29)
+- 完全重写 HTML 邮件模板
+- 实时天气显示
+- 每日一句
+- AI 编者按深度解读
 
 ---
 
-### v2.0.0 (2026-06-29)
+**🌟 如果这个项目对你有帮助，请给一个 Star！**
 
-#### ✨ 重构
-- 🎨 完全重写 HTML 邮件模板，参考 PDF 样式设计
-- 🤖 改用 AI 自动化（WorkBuddy Automation）替代本地 cron
-- 📰 新闻来源改为实时 WebSearch，内容更真实有效
-
-#### ✨ 新增
-- 🌤️ 邮件头部实时天气显示
-- 💬 每日一句（按时段不同类型）
-- 🧠 AI 编者按深度解读（TOP3头条 + 重点新闻）
-- 💰 理财版块「人话版 + 专业原话」双解读
-- 📈 今日趋势深度解读版块
-
-#### 🐛 修复
-- 修复 `nodemailer.createTransporter` → `createTransport` API 错误
-- 修复命令行参数解析（支持 `--key=value` 和 `--key value`）
-
----
-
-**🌟 如果这个项目对你有帮助，请给一个 Star！🌟**
-
-[⬆ 回到顶部](#lumapost---光影邮报-)
+[⬆ 回到顶部](#lumapost--光影邮报-)
