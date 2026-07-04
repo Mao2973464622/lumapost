@@ -14,3 +14,4 @@ ExecStartPost=/usr/bin/node scripts/mail-provider.js --send --subject="晨报" -
 StandardOutput=journal
 
 # 4 个定时器分别在 4 个时段触发（见 lumapost-*.timer）
+#3.0
