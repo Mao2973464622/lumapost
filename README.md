@@ -1,4 +1,4 @@
-# LumaPost · AI 每日邮件推送
+# LumaPost · AI 每日邮件推送   
 
 > 自动抓取 GitHub 热门项目 / 新闻 / 天气
 > 生成精美 HTML 邮件并通过 SMTP 定时发送到你的邮箱
