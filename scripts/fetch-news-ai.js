@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * fetch-news-ai.js — AI 驱动的新闻抓取脚本（v2.6 多信息源升级版）
+ * fetch-news-ai.js — AI 驱动的新闻抓取脚本（v3.0）
  *
  * 核心改进：
  *   1. 关键字过滤热榜 → 每个版块只接收相关内容
@@ -305,7 +305,7 @@ const EXTRA_SOURCES = [
       // 方式2: 中文搜索引擎聚合
       if (items.length < 3) {
         try {
-          const r2 = await fetch('https://www.sogou.com/web?query=数码闲聊站+爆料+2026',
+          const r2 = await fetch('https://www.sogou.com/web?query=数码闲聊站+爆料+' + new Date().getFullYear(),
             { headers: { 'User-Agent': 'Mozilla/5.0' }, signal: AbortSignal.timeout(8000) });
           const html2 = await r2.text();
           const re2 = /<a[^>]*href="(https?:\/\/[^"]+)"[^>]*>([^<]{10,150})<\/a>/gi;
@@ -325,7 +325,8 @@ const EXTRA_SOURCES = [
   { name: 'GitHub Trending', url: null,
     fetch: async () => {
       try {
-        const res = await fetch('https://api.github.com/search/repositories?q=created:>2026-06-24&sort=stars&order=desc&per_page=15', { headers: { 'User-Agent': 'LumaPost' } });
+        const weekAgo = new Date(Date.now() - 7 * 86400000).toISOString().slice(0, 10);
+        const res = await fetch(`https://api.github.com/search/repositories?q=created:>${weekAgo}&sort=stars&order=desc&per_page=15`, { headers: { 'User-Agent': 'LumaPost' } });
         const data = await res.json();
         return (data.items || []).map(r => ({
           raw_title: `[GitHub] ${r.full_name}: ${r.description || ''}`,
@@ -779,7 +780,7 @@ async function main() {
     process.exit(0);
   }
 
-  console.log(`🚀 LumaPost ${periodCfg.label} 新闻抓取 (v2.6 多信息源)`);
+  console.log(`🚀 LumaPost ${periodCfg.label} 新闻抓取 (v3.0)`);
   console.log(`📍 时段: ${periodCfg.label} | 重点: ${periodCfg.focus}`);
   try {
     console.log(`🤖 AI: ${ai.getConfig().providerName} (${ai.getConfig().model})`);
@@ -799,6 +800,8 @@ async function main() {
     aiMode = false;
     console.log(`⚠️ AI 模式不可用，使用纯热榜降级模式`);
   }
+
+  try {
 
   // ── 1) 热榜 ──
   console.log('📰 抓取热榜...');
@@ -902,7 +905,11 @@ async function main() {
             quicknote: `${item.sourcePlatform || '热榜'} #${item.rank || i+1}`,
             source: `${item.sourcePlatform}热榜`,
             url: item.url || 'https://uapis.cn',
-            time: item.updateTime ? new Date(item.updateTime).toISOString() : new Date().toISOString(),
+            time: (() => {
+              if (!item.updateTime) return new Date().toISOString();
+              const t = new Date(item.updateTime);
+              return (t && !isNaN(t.getTime())) ? t.toISOString() : new Date().toISOString();
+            })(),
             stars: Math.max(2, 5 - i), verified: true,
           }))
         : fallbackItemsForSection(sec);
@@ -946,7 +953,7 @@ async function main() {
     sections: sectionsData.filter(s => s.items && s.items.length > 0),
     summary,
     meta: {
-      version: '2.6',
+      version: '3.0',
       aiMode,
       quality,
       generatedAt: new Date().toISOString(),
@@ -966,7 +973,10 @@ async function main() {
     console.warn(`⚠️ 内容质量偏低，请检查 AI API 余额或热榜数据源。`);
   }
 
-  releaseLock(lockPath);
+  } finally {
+    // 确保 lock 在任何情况下（包括异常）都被释放
+    releaseLock(lockPath);
+  }
 }
 
 main().catch(err => {

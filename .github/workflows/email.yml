@@ -37,7 +37,7 @@ env:
 
 jobs:
   send:
-    name: 📮 LumaPost v2.8
+    name: 📮 LumaPost v3.0
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -54,12 +54,12 @@ jobs:
           P="${{ inputs.period }}"
           if [ -z "$P" ] || [ "$P" = "auto" ]; then
             CST_H=$(( ($(date -u +%H) + 8) % 24 ))
-            case "$CST_H" in 6) P=morning;; 12) P=noon;; 17) P=afternoon;; 21) P=evening;; *) P=morning;; esac
+            case "$CST_H" in 6|7|8|9|10|11) P=morning;; 12|13|14|15|16) P=noon;; 17|18|19|20) P=afternoon;; *) P=evening;; esac
           fi
           echo "period=$P" >> $GITHUB_OUTPUT
           echo "🌅 $P"
 
-      - name: 🧠 AI 新闻（v2.8·18源·10版块）
+      - name: 🧠 AI 新闻（v3.0·18源·10版块）
         id: ai
         continue-on-error: true
         env:
@@ -99,7 +99,7 @@ jobs:
           case "${{ steps.period.outputs.period }}" in
             morning)   T="早报";; noon) T="午报";; afternoon) T="傍晚速递";; evening) T="夜间总结";; *) T="特刊";;
           esac
-          node scripts/mail-provider.js --send --subject="✨ LumaPost · 光影邮报 · $T（v2.8）" --body-file=data/${{ steps.period.outputs.period }}-email.html
+          node scripts/mail-provider.js --send --subject="✨ LumaPost · 光影邮报 · $T（v3.0）" --body-file=data/${{ steps.period.outputs.period }}-email.html
 
       - name: 💾 保存
         if: always()

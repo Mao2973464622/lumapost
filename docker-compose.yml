@@ -1,7 +1,5 @@
-version: '3.8'
-
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-#  Docker Compose for LumaPost
+#  Docker Compose for LumaPost v3.0
 #  部署: docker compose up -d
 #  测试: docker compose run --rm lumapost all:morning
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

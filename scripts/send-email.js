@@ -1,20 +1,20 @@
 #!/usr/bin/env node
 /**
- * send-email.js - 邮件发送脚本
- * 
+ * send-email.js - 邮件发送脚本（已废弃）
+ *
+ * @deprecated 此文件已废弃，请使用 mail-provider.js
+ *             保留仅为向后兼容，将在 v4.0 移除
+ *             npm scripts 已全部指向 mail-provider.js
+ *
  * 功能：通过SMTP发送HTML邮件
  * 输入：HTML文件或HTML字符串
- * 
+ *
  * 使用方法：
- *   node scripts/send-email.js --to=<收件人> --subject=<主题> --body-file=<HTML文件>
- * 
- * 示例：
- *   node scripts/send-email.js --to=test@example.com --subject="测试邮件" --body-file=/tmp/email.html
+ *   node scripts/mail-provider.js --send --to=<收件人> --subject=<主题> --body-file=<HTML文件>
  */
 
 const nodemailer = require('nodemailer');
 const fs = require('fs');
-const path = require('path');
 
 // 加载 .env 文件（如果存在）
 try { require('dotenv').config(); } catch(e) {}
@@ -66,7 +66,7 @@ function parseArgs() {
       options.bodyFile = args[++i];
     } else if ((arg === '--body' || arg === '-b') && args[i + 1]) {
       options.body = args[++i];
-    } else if ((arg === '--from' || arg === '-f') && args[i + 1]) {
+    } else if ((arg === '--from' || arg === '-r') && args[i + 1]) {
       options.from = args[++i];
     } else if (arg === '--help' || arg === '-h') {
       printHelp();
@@ -96,7 +96,7 @@ function printHelp() {
 
 可选参数：
   --body, -b            HTML内容字符串（与--body-file二选一）
-  --from, -f            发件人邮箱（默认使用.env中的EMAIL_FROM）
+  --from, -r            发件人邮箱（默认使用.env中的MAIL_USER）
   --help, -h             显示帮助信息
 
 示例：

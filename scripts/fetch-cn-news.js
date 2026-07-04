@@ -18,9 +18,15 @@ function sleep(ms) {
 }
 
 async function fetchJSON(url, headers = {}) {
-  const res = await fetch(url, { headers });
-  if (!res.ok) throw new Error(`HTTP ${res.status}: ${url}`);
-  return await res.json();
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 10000);
+  try {
+    const res = await fetch(url, { headers, signal: controller.signal });
+    if (!res.ok) throw new Error(`HTTP ${res.status}: ${url}`);
+    return await res.json();
+  } finally {
+    clearTimeout(timeout);
+  }
 }
 
 function getNow() {
@@ -69,7 +75,7 @@ async function fetchHotBoard(type, limit = 8) {
   try {
     const url = `https://uapis.cn/api/v1/misc/hotboard?type=${type}`;
     const data = await fetchJSON(url);
-    const list = data.list || [];
+    const list = data.list || data.data?.list || [];
     return list.slice(0, limit).map((item, i) => ({
       title: item.title || item.name || '无标题',
       summary: item.desc || item.description || `${type}热门话题`,
@@ -129,6 +135,26 @@ function generateSummary(period) {
     ],
   };
   return summaries[period] || summaries.morning;
+}
+
+// ── 天气获取（降级模式也使用真实数据） ─────────────────
+
+async function fetchWeather() {
+  const lat = process.env.WEATHER_LAT || '28.20';
+  const lon = process.env.WEATHER_LON || '112.97';
+  try {
+    const controller = new AbortController();
+    const to = setTimeout(() => controller.abort(), 6000);
+    const res = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current_weather=true&timezone=auto`, { signal: controller.signal });
+    clearTimeout(to);
+    const data = await res.json();
+    const w = data.current_weather || {};
+    const map = {0:'☀️ 晴朗',1:'🌤 少云',2:'⛅ 多云',3:'☁️ 阴天',45:'🌫 雾',48:'🌫 雾凇',51:'🌦 小雨',53:'🌦 中雨',55:'🌦 大雨',61:'🌧 雨',63:'🌧 中雨',65:'🌧 大雨',71:'🌨 小雪',73:'🌨 中雪',75:'🌨 大雪',80:'🌦 阵雨',81:'🌦 强阵雨',82:'⛈ 强阵雨',95:'⛈ 雷暴',96:'⛈ 雷暴冰雹',99:'⛈ 强雷暴'};
+    const city = process.env.WEATHER_CITY || '湖南长沙';
+    return { location: city, text: map[w.weathercode] || '☁️ 多云', temp: `${Math.round(w.temperature)}°C` };
+  } catch (e) {
+    return { location: process.env.WEATHER_CITY || '湖南长沙', text: '☁️ 多云', temp: '26°C' };
+  }
 }
 
 // ── 主函数 ───────────────────────────────────────────
@@ -280,6 +306,9 @@ async function main() {
     headlines.push(makeHeadline([item], item.source || '综合'));
   }
 
+  // 获取天气数据（不再硬编码）
+  const weather = await fetchWeather();
+
   // 组装数据
   const data = {
     date: dateStr,
@@ -287,11 +316,7 @@ async function main() {
     greetingType: period.key,
     greeting: period.greet,
     dailyQuote: getQuote(period.key),
-    weather: {
-      location: '湖南长沙',
-      text: '☁️ 多云',
-      temp: '26°C',
-    },
+    weather,
     headline: headlines.slice(0, 3),
     sections: sections.slice(0, 8),
     summary: generateSummary(period.key),

@@ -1,13 +1,13 @@
 ---
 name: lumapost
-version: "2.9.0"
+version: "3.0.0"
 description: "LumaPost 光影邮报 - AI Agent 主动搜索最新新闻+深度分析+邮件推送。10大版块、主动WebSearch实时新闻（非热榜旧数据）、真实时间戳、零外部API费用、GitHub Actions云端部署。"
 author: "QiXua"
 category: "automation"
 tags: ["news", "email", "automation", "ai", "daily", "github-actions", "deepseek", "minimax", "multi-model", "multi-provider"]
 ---
 
-# LumaPost · 光影邮报 Skill v2.9
+# LumaPost · 光影邮报 Skill v3.0
 
 > 🔍 **主动搜索** 实时新闻 · 🧠 AI Agent 深度分析 · 📮 自动推送 — **零外部API费** ✨
 
@@ -32,18 +32,21 @@ LumaPost 是一个**主动搜索+AI深度分析**的智能新闻邮件系统。�
 
 ---
 
-## 🆕 v2.9 新特性
+## 🆕 v3.0 更新
 
-| v2.8 | v2.9 |
+| v2.9 | v3.0 |
 |---|---|
-| 被动抓 uapis 热榜旧数据 | ✅ **主动 WebSearch** 搜索各领域最新新闻 |
-| 时间戳全是假的时间 | ✅ **每条新闻真实发布时间**（如6月23日10:10） |
-| 调用 DeepSeek API 花钱 | ✅ **AI Agent 亲自分析**，零外部API费用 |
-| — | ✅ 分析更有深度、有个人观点和正反判断 |
+| Dockerfile 路径错误，Docker 部署失败 | ✅ **修复 COPY 路径**，Docker 部署可用 |
+| 锁异常时不释放，任务卡 30 分钟 | ✅ **try/finally 确保锁释放** |
+| GitHub/搜狗日期硬编码 | ✅ **动态计算日期** |
+| loadConfig 每次重复调用 | ✅ **模块级缓存** |
+| .env.example 泄露真实凭证 | ✅ **清除所有真实凭证** |
+| 版本号 5 个文件不一致 | ✅ **统一为 3.0.0** |
+| 时段检测仅匹配整点 | ✅ **范围匹配**（6-11/12-16/17-20/其他） |
 
 ---
 
-### 10 大版块（v2.9）
+### 10 大版块（v3.0）
 
 | # | 版块 | 搜索关键词 |
 |---|------|-----------|
@@ -138,8 +141,8 @@ LumaPost 是一个**主动搜索+AI深度分析**的智能新闻邮件系统。�
 无需操作，GitHub Actions 每天自动 4 次发送：
 - **06:00** 北京时间 → 早报
 - **12:00** 北京时间 → 午报
-- **16:00** 北京时间 → 午后速递
-- **24:00** 北京时间 → 晚间总结
+- **17:30** 北京时间 → 午后速递
+- **21:00** 北京时间 → 晚间总结
 
 ---
 
@@ -148,7 +151,7 @@ LumaPost 是一个**主动搜索+AI深度分析**的智能新闻邮件系统。�
 ```bash
 # 1. 克隆
 git clone https://github.com/Mao2973464622/lumapost.git
-cd lumapost/lumapost
+cd lumapost
 
 # 2. 安装
 npm install
@@ -291,16 +294,14 @@ lumapost/
 ├── plugin.json                      # 通用插件格式
 ├── plugin-clawhub.json              # OpenCat/Claw 格式
 ├── plugin-skillhub.yaml             # SkillHub 格式
-├── skillhub-plugin/                 # SkillHub 完整包
-└── lumapost/
-    ├── package.json                 # 依赖 + 30+ npm scripts
+└── package.json                     # 依赖 + 30+ npm scripts
     ├── scripts/
     │   ├── ai-provider.js           # 🤖 10+ AI 模型统一接口
     │   ├── mail-provider.js         # 📮 14+ 邮件服务统一接口
     │   ├── fetch-news-ai.js         # 🧠 AI 驱动的新闻抓取
     │   ├── fetch-cn-news.js         # 📊 静态热榜（降级用）
     │   ├── gen-html.js              # 🎨 HTML 邮件生成
-    │   └── send-email.js            # 旧版 SMTP 发送（保留兼容）
+    │   └── send-email.js            # 旧版 SMTP 发送（已废弃，用 mail-provider.js）
     └── data/                        # 生成文件
 ```
 
@@ -362,7 +363,6 @@ schedule:
 | **OpenCat/Claw** | `plugin-clawhub.json` | 导入 JSON |
 | **通用 AI** | `plugin.json` | 复制 prompt 到自定义指令 |
 | **SkillHub** | `plugin-skillhub.yaml` | 导入 YAML |
-| **SkillHub 完整** | `skillhub-plugin/` | 上传整个目录 |
 
 ---
 

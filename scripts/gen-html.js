@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * gen-html.js - LumaPost 光影邮报 HTML 邮件生成脚本 v5
+ * gen-html.js - LumaPost 光影邮报 HTML 邮件生成脚本 v3.0
  *
  * 参考 PDF 样式重写，包含：
  *   - 渐变头部 + 天气 + 问候
@@ -21,21 +21,21 @@ const CONFIG = {
 };
 
 // ============ 解析参数 ============
+// 支持 --key=value 和 --key value 两种格式，值中可包含 = 号
 function parseArgs() {
   const args = process.argv.slice(2);
   for (let i = 0; i < args.length; i++) {
     let arg = args[i];
-    // 支持 --key=value 和 --key value 两种格式
-    if (arg.includes('=')) {
-      const [key, ...valParts] = arg.split('=');
-      arg = key;
-      args[i] = valParts.join('=');
-      args.splice(i + 1, 0, args[i]);
+    let val = null;
+    const eqIdx = arg.indexOf('=');
+    if (eqIdx > 0) {
+      val = arg.slice(eqIdx + 1);
+      arg = arg.slice(0, eqIdx);
     }
-    if ((arg === '--data-file' || arg === '-d') && args[i + 1]) {
-      CONFIG.dataFile = args[++i];
-    } else if ((arg === '--output' || arg === '-o') && args[i + 1]) {
-      CONFIG.outputFile = args[++i];
+    if ((arg === '--data-file' || arg === '-d') && (val || args[i + 1])) {
+      CONFIG.dataFile = val || args[++i];
+    } else if ((arg === '--output' || arg === '-o') && (val || args[i + 1])) {
+      CONFIG.outputFile = val || args[++i];
     }
   }
   if (!CONFIG.dataFile || !CONFIG.outputFile) {
@@ -100,7 +100,8 @@ function esc(text) {
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
 }
 
 // ============ 相对时间 ============
@@ -367,7 +368,13 @@ function main() {
   console.log(`📂 输入: ${CONFIG.dataFile}`);
 
   const raw = fs.readFileSync(CONFIG.dataFile, 'utf8');
-  const data = JSON.parse(raw);
+  let data;
+  try {
+    data = JSON.parse(raw);
+  } catch (e) {
+    console.error(`❌ JSON 解析失败: ${CONFIG.dataFile}\n   ${e.message}`);
+    process.exit(1);
+  }
 
   const html = generateHTML(data);
 

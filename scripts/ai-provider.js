@@ -137,9 +137,13 @@ const PROVIDERS = {
 };
 
 // ─────────────────────────────────────────────
-//  配置加载：智能识别 API Key
+//  配置加载：智能识别 API Key（带模块级缓存）
 // ─────────────────────────────────────────────
+let _cachedConfig = null;
+
 function loadConfig() {
+  if (_cachedConfig) return _cachedConfig;
+
   const providerKey = (process.env.AI_PROVIDER || 'deepseek').toLowerCase();
   const provider = PROVIDERS[providerKey];
 
@@ -163,7 +167,7 @@ function loadConfig() {
     );
   }
 
-  return {
+  return _cachedConfig = {
     provider: providerKey,
     providerName: provider.name,
     apiKey,
@@ -297,18 +301,20 @@ async function chat(messages, options = {}) {
 // ─────────────────────────────────────────────
 async function chatJSON(messages, options = {}) {
   const cfg = loadConfig();
+  // 修复：去掉最后一条原始消息，避免重复发送
+  const lastMsg = messages[messages.length - 1];
   const enhanced = [
-    ...messages,
+    ...messages.slice(0, -1),
     {
-      role: 'user',
-      content: (messages[messages.length - 1]?.content || '') +
+      role: lastMsg?.role || 'user',
+      content: (lastMsg?.content || '') +
                '\n\n【严格规则】只返回合法 JSON，不要任何解释、不要 markdown 代码块标记。'
     }
   ];
 
   const text = await chat(enhanced, options);
-  // 尝试提取 JSON
-  const jsonMatch = text.match(/\{[\s\S]*\}/);
+  // 修复：同时匹配 {} 和 [] 格式的 JSON
+  const jsonMatch = text.match(/\{[\s\S]*\}/) || text.match(/\[[\s\S]*\]/);
   if (jsonMatch) {
     try { return JSON.parse(jsonMatch[0]); }
     catch (e) { /* fall through */ }

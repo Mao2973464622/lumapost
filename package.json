@@ -1,8 +1,8 @@
 {
   "name": "lumapost",
-  "version": "2.0.0",
+  "version": "3.0.0",
   "description": "LumaPost - 光影邮报：AI 驱动的智能新闻邮件推送系统。支持 10+ AI 模型（DeepSeek/MiniMax/OpenAI/Claude/通义千问/智谱/豆包/Kimi等）、10+ 邮件服务（QQ/网易/Gmail/Outlook/Resend/SendGrid等），GitHub Actions 云端部署，电脑关机也能发。",
-  "main": "scripts/gen-html.js",
+  "main": "scripts/fetch-news-ai.js",
   "scripts": {
     "ai:list": "node scripts/ai-provider.js --list",
     "ai:test": "node scripts/ai-provider.js --test",
@@ -47,7 +47,7 @@
   "license": "MIT",
   "dependencies": {
     "dotenv": "^17.4.2",
-    "nodemailer": "^6.9.8"
+    "nodemailer": "^7.0.5"
   },
   "engines": {
     "node": ">=18.0.0"

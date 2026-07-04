@@ -216,9 +216,13 @@ const PROVIDERS = {
 };
 
 // ─────────────────────────────────────────────
-//  配置加载
+//  配置加载（带模块级缓存）
 // ─────────────────────────────────────────────
+let _cachedMailConfig = null;
+
 function loadConfig() {
+  if (_cachedMailConfig) return _cachedMailConfig;
+
   const providerKey = (process.env.MAIL_PROVIDER || 'qq').toLowerCase();
   const provider = PROVIDERS[providerKey];
 
@@ -285,13 +289,13 @@ function loadConfig() {
     config.apiUrl = url;
   }
 
-  return config;
+  return _cachedMailConfig = config;
 }
 
 // ─────────────────────────────────────────────
 //  HTTP 工具
 // ─────────────────────────────────────────────
-function httpJSON(url, method, headers, body) {
+function httpJSON(url, method, headers, body, timeoutMs = 30000) {
   return new Promise((resolve, reject) => {
     const parsed = new URL(url);
     const lib = parsed.protocol === 'http:' ? http : https;
@@ -303,6 +307,7 @@ function httpJSON(url, method, headers, body) {
       path: parsed.pathname + parsed.search,
       method,
       headers: { ...headers, ...(data ? { 'Content-Length': Buffer.byteLength(data) } : {}) },
+      timeout: timeoutMs,
     }, (res) => {
       let buf = '';
       res.on('data', c => buf += c);
@@ -316,6 +321,7 @@ function httpJSON(url, method, headers, body) {
       });
     });
     req.on('error', reject);
+    req.on('timeout', () => { req.destroy(); reject(new Error('邮件 API 请求超时')); });
     if (data) req.write(data);
     req.end();
   });
@@ -411,7 +417,10 @@ async function sendViaMailgun(cfg, mail) {
       let buf = '';
       res.on('data', c => buf += c);
       res.on('end', () => {
-        if (res.statusCode < 300) resolve(JSON.parse(buf || '{}'));
+        if (res.statusCode < 300) {
+          try { resolve(JSON.parse(buf || '{}')); }
+          catch (e) { resolve({ raw: buf }); }
+        }
         else reject(new Error(`HTTP ${res.statusCode}: ${buf}`));
       });
     });
@@ -469,13 +478,11 @@ async function send(mail) {
   if (!mail || !mail.subject || !mail.html) {
     throw new Error('❌ 缺少必填字段: subject, html');
   }
-  if (!mail.to) {
-    const cfg0 = loadConfig();
-    mail.to = cfg0.to;
-  }
 
   const cfg = loadConfig();
-  mail.to = mail.to || cfg.to;
+  if (!mail.to) {
+    mail.to = cfg.to;
+  }
 
   console.log(`📧 准备发送邮件`);
   console.log(`   服务商: ${cfg.providerName} (${cfg.type})`);
@@ -540,8 +547,15 @@ if (require.main === module) {
     // --send --to=x@y.com --subject=xxx --body-file=path
     const opts = {};
     for (let i = 1; i < args.length; i++) {
-      const [k, v] = args[i].slice(2).split('=');
-      opts[k] = v || true;
+      const raw = args[i];
+      if (raw.startsWith('--')) {
+        const eqIdx = raw.indexOf('=');
+        if (eqIdx > 0) {
+          const k = raw.slice(2, eqIdx);
+          const v = raw.slice(eqIdx + 1);
+          opts[k] = v;
+        }
+      }
     }
     const fs = require('fs');
     if (opts['body-file'] && fs.existsSync(opts['body-file'])) {
