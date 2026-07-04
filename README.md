@@ -3,8 +3,8 @@
 > 自动抓取 GitHub 热门项目 / 新闻 / 天气
 > 生成精美 HTML 邮件并通过 SMTP 定时发送到你的邮箱
 
-![Node](https://img.shields.io/badge/node-%3E%3D16-brightgreen)
-![License](https://img.shields.io/github/license/yourname/lumapost)
+![Node](<https://img.shields.io/badge/node-%3E%3D16-brightgreen>)
+![License](https://img.shields.io/github/license/Mao2973464622/lumapost)
 
 ---
 
@@ -23,7 +23,7 @@
 ### 1️⃣ 克隆项目
 
 ```bash
-git clone https://github.com/yourname/lumapost.git
+git clone https://github.com/Mao2973464622/lumapost.git
 cd lumapost
 ```
 
@@ -66,40 +66,54 @@ node scripts/send-email.js
 使用 GitHub Actions（已内置）：
 
 ```
-.github/workflows/daily.yml
+.github/workflows/email.yml
 ```
 
-每天 UTC 00:00 自动执行。
+每天自动执行（北京时间 06:00 / 12:00 / 17:30 / 21:00）。
 
 ---
 
 ## 📁 项目结构
 
 ```
-lumapost/
-├── .env                    # 环境变量（SMTP账号/密码，不提交Git）
-├── .env.example             # 环境变量模板
-├── .gitignore               # Git忽略规则
+lumapost github版/       
 ├── .github/
 │   └── workflows/
-│       └── daily.yml        # GitHub Actions 定时触发
-├── package.json
-├── package-lock.json
-├── README.md
-├── 技术说明.md
-├── 问题.md
+│       └── email.yml     # GitHub Actions 定时触发
+├── .workbuddy/
+│   └── memory/
+│       ├── 2026-7-04.md
+        └── MEMORY.md
 ├── scripts/
-│   ├── gen-html.js          # ⭐ HTML邮件正文生成（核心）
-│   ├── send-email.js        # ⭐ SMTP发送邮件（核心）
-│   ├── fetch-github.js      # GitHub Trending 抓取
-│   └── cron-handler.js      # 定时任务入口
-├── data/
-│   ├── test-noon.json       # 测试用新闻数据
-│   ├── preview.html         # 本地HTML预览
-│   └── YYYY-MM-DD.json      # 每次运行生成当日数据缓存
-├── logs/
-│   └── .gitkeep             # 日志目录占位
-└── node_modules/            # npm install 生成（被 .gitignore 忽略）
+│   ├── ai-provider.js    #统一 AI 模型调用层
+│   ├── fetch-cn-news.js  #获取中文实时热榜新闻
+│   ├── fetch-news-ai.js  #AI 驱动的新闻抓取脚本（v3.0）
+│   ├── gen-html.js        #光影邮报 HTML 邮件生成脚本 v3.0
+│   ├── mail-provider.js    #统一邮件发送层
+│   └── send-email.js     #邮件发送脚本（已废弃）
+│
+│
+│
+├── .env.example             # 环境变量模板
+└── .gitighore               #不提交内容
+├── 技术说明.md
+├── 使用说明.md
+├── 问题.md
+├── crontab.example         #定时任务的早中晚
+├── docker-compose.yml      #定时任务
+├── package-lock.json      
+├── Dockerfile             
+├── LlCENSE             
+├── lumapost.service            
+├── ofelia.ini            
+├── package-lock.json     
+├── package.json   
+├── plugin-clawhub.json   
+├── plugin-skillhub.yaml   
+├── plugin.json   
+├── README.md           
+└── SKILLS.md
+
 ```
 
 ---
