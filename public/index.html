@@ -3,13 +3,14 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="theme-color" content="#0B1020">
+<meta name="theme-color" content="#080B16">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="color-scheme" content="dark light">
 <title>LumaPost · 光影邮报</title>
 <style>
 /* ============================================================
-   LumaPost Design System v5 — Tokens / Reset / Layout
+   LumaPost Design System v5.1 — No-Emoji / SVG Icon edition
    ============================================================ */
 :root{
   --brand-1:#6366F1; --brand-2:#8B5CF6; --brand-3:#22D3EE;
@@ -66,6 +67,14 @@ input,select,textarea{font:inherit;color:inherit}
 ::-webkit-scrollbar-thumb{background:var(--line-strong);border-radius:9px}
 ::selection{background:var(--brand-soft)}
 
+/* ---------- SVG icon base ---------- */
+.ic{
+  width:1em;height:1em;display:inline-block;vertical-align:-0.145em;
+  fill:currentColor;flex:0 0 auto;overflow:hidden;
+}
+.ic-l{width:1.15em;height:1.15em}
+.ic-xl{width:1.7em;height:1.7em}
+
 /* ---------- Layout ---------- */
 .app{display:flex;min-height:100dvh}
 .sidebar{
@@ -79,7 +88,7 @@ input,select,textarea{font:inherit;color:inherit}
 .brand{display:flex;align-items:center;gap:var(--s-3);padding:0 var(--s-2) var(--s-5)}
 .brand-logo{
   width:40px;height:40px;flex:0 0 40px;border-radius:13px;background:var(--grad-brand);
-  display:grid;place-items:center;font-size:19px;box-shadow:var(--sh-brand);
+  display:grid;place-items:center;color:#fff;font-size:19px;box-shadow:var(--sh-brand);
 }
 .brand-name{font-size:15.5px;font-weight:760;letter-spacing:.2px;line-height:1.25}
 .brand-sub{font-size:10.5px;color:var(--text-3);letter-spacing:.7px;text-transform:uppercase}
@@ -91,10 +100,11 @@ input,select,textarea{font:inherit;color:inherit}
   text-align:left;width:100%;position:relative;
   transition:background var(--fast) var(--ease),color var(--fast) var(--ease),transform var(--fast) var(--ease);
 }
-.nav-item .ico{font-size:16px;width:20px;text-align:center;flex:0 0 20px}
+.nav-item .ic{width:18px;height:18px;opacity:.82}
 .nav-item:hover{background:var(--surface-2);color:var(--text)}
 .nav-item:active{transform:scale(.985)}
 .nav-item.active{background:var(--brand-soft);color:var(--text);font-weight:660}
+.nav-item.active .ic{opacity:1;color:var(--brand-1)}
 .nav-item.active::before{
   content:'';position:absolute;left:-12px;top:50%;transform:translateY(-50%);
   width:3px;height:18px;border-radius:0 3px 3px 0;background:var(--grad-brand);
@@ -111,15 +121,15 @@ input,select,textarea{font:inherit;color:inherit}
   border-bottom:1px solid var(--line);
 }
 .topbar .brand{padding:0;gap:var(--s-2)}
-.topbar .brand-logo{width:32px;height:32px;flex-basis:32px;border-radius:10px;font-size:16px}
+.topbar .brand-logo{width:32px;height:32px;flex-basis:32px;border-radius:10px;font-size:15px}
 .topbar .brand-name{font-size:14.5px}
 .topbar-actions{display:flex;gap:var(--s-2)}
 .icon-btn{
   width:36px;height:36px;border-radius:11px;display:grid;place-items:center;font-size:16px;
-  background:var(--surface-2);border:1px solid var(--line);
-  transition:transform var(--fast) var(--ease),background var(--fast) var(--ease);
+  background:var(--surface-2);border:1px solid var(--line);color:var(--text-2);
+  transition:transform var(--fast) var(--ease),background var(--fast) var(--ease),color var(--fast) var(--ease);
 }
-.icon-btn:active{transform:scale(.92);background:var(--surface-3)}
+.icon-btn:active{transform:scale(.92);background:var(--surface-3);color:var(--text)}
 
 .main{flex:1;margin-left:var(--sidebar-w);padding:var(--s-6) var(--s-6) var(--s-10);width:100%;min-width:0}
 .wrap{max-width:var(--maxw);margin:0 auto;width:100%}
@@ -134,17 +144,183 @@ input,select,textarea{font:inherit;color:inherit}
 }
 .tabbar-inner{display:flex;height:var(--tabbar-h)}
 .tab-item{
-  flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;
+  flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;
   color:var(--text-3);font-size:10.5px;font-weight:620;position:relative;
   transition:color var(--fast) var(--ease);
 }
-.tab-item .ico{font-size:18px;transition:transform var(--mid) var(--ease)}
-.tab-item:active .ico{transform:scale(.86)}
+.tab-item .ic{width:20px;height:20px;transition:transform var(--mid) var(--ease)}
+.tab-item:active .ic{transform:scale(.86)}
 .tab-item.active{color:var(--brand-1)}
 .tab-item.active::after{content:'';position:absolute;top:0;width:26px;height:3px;border-radius:0 0 4px 4px;background:var(--grad-brand)}
 @media (prefers-color-scheme:light){.tab-item.active{color:#4F46E5}}
 
-/* ---------- Components (part 2) ---------- */
+/* ---------- Components ---------- */
+.page-head{display:flex;align-items:flex-start;justify-content:space-between;gap:var(--s-4);margin-bottom:var(--s-5);flex-wrap:wrap}
+.page-title{font-size:25px;font-weight:800;letter-spacing:-.4px;line-height:1.25}
+.page-desc{font-size:13px;color:var(--text-3);margin-top:3px}
+.page-head-actions{display:flex;gap:var(--s-2);flex-wrap:wrap}
+
+.section{margin-bottom:var(--s-6)}
+.section-head{display:flex;align-items:center;justify-content:space-between;gap:var(--s-3);margin-bottom:var(--s-3)}
+.section-title{font-size:13px;font-weight:720;color:var(--text-2);display:flex;align-items:center;gap:8px}
+.section-title .ic{width:15px;height:15px;color:var(--text-3)}
+
+.btn{
+  display:inline-flex;align-items:center;justify-content:center;gap:7px;
+  height:42px;padding:0 var(--s-4);border-radius:var(--r-sm);
+  font-size:14px;font-weight:660;white-space:nowrap;border:1px solid transparent;
+  user-select:none;
+  transition:transform var(--fast) var(--ease),background var(--fast) var(--ease),box-shadow var(--fast) var(--ease),border-color var(--fast) var(--ease),opacity var(--fast),filter var(--fast);
+}
+.btn .ic{width:16px;height:16px}
+.btn:active{transform:scale(.972)}
+.btn:disabled{opacity:.5;pointer-events:none}
+.btn-primary{background:var(--grad-brand);color:#fff;box-shadow:var(--sh-brand)}
+.btn-primary:hover{filter:brightness(1.07)}
+.btn-secondary{background:var(--surface-2);color:var(--text);border-color:var(--line-strong)}
+.btn-secondary:hover{background:var(--surface-3)}
+.btn-ghost{background:transparent;color:var(--text-2)}
+.btn-ghost:hover{background:var(--surface-2);color:var(--text)}
+.btn-danger{background:var(--err-soft);color:var(--err);border-color:rgba(244,63,94,.28)}
+.btn-sm{height:34px;padding:0 var(--s-3);font-size:12.5px;border-radius:var(--r-xs);gap:5px}
+.btn-sm .ic{width:14px;height:14px}
+.btn-lg{height:48px;padding:0 var(--s-5);font-size:15px}
+.btn-block{width:100%}
+
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r-md);box-shadow:var(--sh-1);overflow:hidden}
+.card-pad{padding:var(--s-5)}
+.card-hd{display:flex;align-items:center;justify-content:space-between;gap:var(--s-3);padding:var(--s-4) var(--s-5);border-bottom:1px solid var(--line)}
+.card-hd-title{font-size:14px;font-weight:700}
+.card-bd{padding:var(--s-5)}
+
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:var(--s-3)}
+.stat{
+  position:relative;overflow:hidden;background:var(--surface);border:1px solid var(--line);
+  border-radius:var(--r-md);padding:var(--s-4);box-shadow:var(--sh-1);
+  transition:transform var(--mid) var(--ease),box-shadow var(--mid) var(--ease),border-color var(--mid) var(--ease);
+}
+.stat::after{content:'';position:absolute;right:-28px;top:-28px;width:88px;height:88px;border-radius:50%;background:var(--grad-glow);pointer-events:none}
+.stat:hover{transform:translateY(-2px);box-shadow:var(--sh-2);border-color:var(--line-strong)}
+.stat-ico{width:36px;height:36px;border-radius:11px;display:grid;place-items:center;background:var(--surface-2);margin-bottom:var(--s-3);color:var(--text-2)}
+.stat-ico .ic{width:18px;height:18px}
+.stat-ico.brand{background:var(--brand-soft);color:var(--brand-1)}
+.stat-ico.ok{background:var(--ok-soft);color:var(--ok)}
+.stat-ico.warn{background:var(--warn-soft);color:var(--warn)}
+.stat-ico.info{background:var(--info-soft);color:var(--info)}
+.stat-val{font-size:19px;font-weight:790;letter-spacing:-.5px;line-height:1.2;word-break:break-word}
+.stat-label{font-size:11.5px;color:var(--text-3);margin-top:3px;font-weight:560}
+
+.form-row{display:grid;grid-template-columns:1fr 1fr;gap:var(--s-4)}
+.field{margin-bottom:var(--s-4)}
+.field:last-child{margin-bottom:0}
+.label{display:flex;align-items:center;justify-content:space-between;gap:var(--s-2);font-size:12.5px;font-weight:650;color:var(--text-2);margin-bottom:7px}
+.label-hint{font-size:11px;font-weight:500;color:var(--text-3)}
+.input,.select{
+  width:100%;height:44px;padding:0 var(--s-3);background:var(--input);
+  border:1px solid var(--line-strong);border-radius:var(--r-sm);color:var(--text);
+  font-size:14px;outline:none;appearance:none;
+  transition:border-color var(--fast) var(--ease),box-shadow var(--fast) var(--ease),background var(--fast);
+}
+textarea.input{height:auto;min-height:84px;padding:11px var(--s-3);resize:vertical;line-height:1.55}
+.input::placeholder{color:var(--text-3)}
+.input:focus,.select:focus{border-color:var(--brand-1);box-shadow:0 0 0 3.5px var(--brand-soft);background:var(--surface)}
+.select{
+  background-image:url("data:image/svg+xml;charset=utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath fill='%238A94A8' d='M5 6 0 0h10z'/%3E%3C/svg%3E");
+  background-repeat:no-repeat;background-position:right 14px center;padding-right:36px;
+}
+.input-wrap{position:relative}
+.input-wrap .input{padding-right:46px}
+.input-eye{position:absolute;right:5px;top:50%;transform:translateY(-50%);width:34px;height:34px;border-radius:9px;display:grid;place-items:center;font-size:15px;color:var(--text-3);transition:background var(--fast),color var(--fast)}
+.input-eye:hover{background:var(--surface-2);color:var(--text)}
+.input-eye.on{color:var(--brand-1)}
+
+.range{-webkit-appearance:none;appearance:none;width:100%;height:6px;border-radius:99px;background:var(--surface-3);outline:none;margin:12px 0 2px}
+.range::-webkit-slider-thumb{-webkit-appearance:none;width:20px;height:20px;border-radius:50%;background:var(--grad-brand);border:2.5px solid var(--surface);box-shadow:0 2px 8px rgba(99,102,241,.5);cursor:pointer;transition:transform var(--fast) var(--ease)}
+.range::-webkit-slider-thumb:active{transform:scale(1.15)}
+.range-val{font-variant-numeric:tabular-nums;font-size:12px;font-weight:700;color:var(--brand-1);background:var(--brand-soft);padding:1px 8px;border-radius:var(--r-full)}
+.range-legend{display:flex;justify-content:space-between;font-size:11px;color:var(--text-3);margin-top:4px}
+
+.badge{display:inline-flex;align-items:center;gap:5px;height:23px;padding:0 9px;border-radius:var(--r-full);font-size:11px;font-weight:700;background:var(--surface-3);color:var(--text-2);white-space:nowrap}
+.badge .ic{width:11px;height:11px}
+.badge.ok{background:var(--ok-soft);color:var(--ok)}
+.badge.warn{background:var(--warn-soft);color:var(--warn)}
+.badge.err{background:var(--err-soft);color:var(--err)}
+.badge.info{background:var(--info-soft);color:var(--info)}
+.badge.brand{background:var(--brand-soft);color:var(--brand-1)}
+
+.chips{display:flex;gap:var(--s-2);flex-wrap:wrap}
+.chip{height:32px;padding:0 13px;border-radius:var(--r-full);background:var(--surface-2);border:1px solid var(--line);font-size:12px;font-weight:620;color:var(--text-2);display:inline-flex;align-items:center;gap:6px;font-family:ui-monospace,Menlo,monospace;transition:all var(--fast) var(--ease)}
+.chip:hover{border-color:var(--line-strong);color:var(--text)}
+.chip.active{background:var(--brand-soft);border-color:var(--brand-line);color:var(--brand-1)}
+
+.provider-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(145px,1fr));gap:var(--s-3)}
+.provider{position:relative;text-align:left;padding:var(--s-4);border-radius:var(--r-md);background:var(--surface);border:1.5px solid var(--line);overflow:hidden;transition:all var(--mid) var(--ease)}
+.provider:hover{transform:translateY(-2px);border-color:var(--line-strong);box-shadow:var(--sh-2)}
+.provider:active{transform:scale(.98)}
+.provider.active{border-color:var(--brand-1);background:var(--brand-soft);box-shadow:0 0 0 3px var(--brand-soft)}
+.provider-check{position:absolute;top:9px;right:10px;width:19px;height:19px;border-radius:50%;background:var(--grad-brand);color:#fff;display:none;place-items:center}
+.provider-check .ic{width:11px;height:11px}
+.provider.active .provider-check{display:grid}
+.provider-av{width:34px;height:34px;border-radius:10px;margin-bottom:10px;display:grid;place-items:center;background:var(--surface-2);color:var(--text-2)}
+.provider-av .ic{width:17px;height:17px}
+.provider.active .provider-av{background:var(--grad-brand);color:#fff}
+.provider-name{font-size:13.5px;font-weight:720;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.provider-model{font-size:11px;color:var(--text-3);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-family:ui-monospace,Menlo,monospace}
+
+.list{display:flex;flex-direction:column}
+.list-item{display:flex;align-items:center;gap:var(--s-3);padding:13px var(--s-5);border-bottom:1px solid var(--line);text-align:left;width:100%;transition:background var(--fast) var(--ease)}
+.list-item:last-child{border-bottom:0}
+.list-item.clickable{cursor:pointer}
+.list-item:hover{background:var(--surface-2)}
+.list-item.clickable:active{background:var(--surface-3)}
+.li-main{flex:1;min-width:0}
+.li-title{font-size:13.5px;font-weight:620;line-height:1.45}
+.li-meta{font-size:11.5px;color:var(--text-3);margin-top:3px;display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.li-av{width:34px;height:34px;flex:0 0 34px;border-radius:10px;display:grid;place-items:center;background:var(--surface-2);color:var(--text-3);font-size:13px;font-weight:700;font-variant-numeric:tabular-nums}
+.li-av .ic{width:16px;height:16px}
+.li-radio{width:19px;height:19px;border-radius:50%;flex:0 0 19px;border:2px solid var(--line-strong);position:relative;transition:all var(--fast) var(--ease)}
+.list-item.selected{background:var(--brand-soft)}
+.list-item.selected .li-radio{border-color:var(--brand-1);background:var(--brand-1)}
+.list-item.selected .li-radio::after{content:'';position:absolute;inset:3.5px;border-radius:50%;background:#fff}
+
+.banner{display:flex;align-items:flex-start;gap:var(--s-3);padding:var(--s-4);border-radius:var(--r-md);border:1px solid var(--line);background:var(--surface)}
+.banner.ok{background:var(--ok-soft);border-color:rgba(16,185,129,.28)}
+.banner.warn{background:var(--warn-soft);border-color:rgba(245,158,11,.28)}
+.banner.err{background:var(--err-soft);border-color:rgba(244,63,94,.28)}
+.banner-ico{width:22px;height:22px;display:grid;place-items:center;flex:0 0 22px;margin-top:1px}
+.banner-ico .ic{width:18px;height:18px}
+.banner.ok .banner-ico{color:var(--ok)}
+.banner.warn .banner-ico{color:var(--warn)}
+.banner.err .banner-ico{color:var(--err)}
+.banner-title{font-size:13.5px;font-weight:700;margin-bottom:1px}
+.banner-desc{font-size:12px;color:var(--text-2);line-height:1.55}
+
+.empty{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:var(--s-2);padding:var(--s-8) var(--s-5);text-align:center}
+.empty-ico{width:56px;height:56px;border-radius:18px;display:grid;place-items:center;background:var(--surface-2);border:1px solid var(--line);margin-bottom:var(--s-2);color:var(--text-3)}
+.empty-ico .ic{width:26px;height:26px}
+.empty-title{font-size:14px;font-weight:680}
+.empty-desc{font-size:12.5px;color:var(--text-3);max-width:280px;line-height:1.55}
+
+.sk{background:linear-gradient(90deg,var(--surface-2) 25%,var(--surface-3) 37%,var(--surface-2) 63%);background-size:400% 100%;animation:shimmer 1.35s ease-in-out infinite;border-radius:var(--r-xs)}
+@keyframes shimmer{0%{background-position:100% 0}100%{background-position:0 0}}
+.sk-line{height:12px;margin-bottom:8px}
+.sk-line.w60{width:60%}
+
+.toasts{position:fixed;right:var(--s-5);bottom:calc(var(--s-5) + env(safe-area-inset-bottom));z-index:90;display:flex;flex-direction:column;gap:var(--s-2);pointer-events:none;max-width:min(340px,calc(100vw - 32px))}
+.toast{display:flex;align-items:center;gap:10px;padding:12px var(--s-4);border-radius:var(--r-sm);background:var(--surface-2);border:1px solid var(--line-strong);box-shadow:var(--sh-3);font-size:13px;font-weight:600;pointer-events:auto;animation:toastIn var(--slow) var(--ease) both}
+.toast .ic{width:16px;height:16px}
+.toast.out{animation:toastOut var(--mid) var(--ease) both}
+.toast.ok{border-color:rgba(16,185,129,.4)}
+.toast.ok .ic{color:var(--ok)}
+.toast.err{border-color:rgba(244,63,94,.4)}
+.toast.err .ic{color:var(--err)}
+.toast.info .ic{color:var(--info)}
+.toast.warn .ic{color:var(--warn)}
+@keyframes toastIn{from{opacity:0;transform:translateY(14px) scale(.96)}to{opacity:1;transform:none}}
+@keyframes toastOut{to{opacity:0;transform:translateX(20px) scale(.94)}}
+
+.loading-bar{position:fixed;top:0;left:0;right:0;height:2.5px;z-index:95;overflow:hidden;opacity:0;transition:opacity var(--fast)}
+.loading-bar.on{opacity:1}
 .loading-bar::after{content:'';position:absolute;inset:0;width:38%;background:var(--grad-brand);border-radius:9px;animation:barSlide 1.05s var(--ease) infinite}
 @keyframes barSlide{0%{transform:translateX(-105%)}100%{transform:translateX(300%)}}
 
@@ -154,49 +330,35 @@ input,select,textarea{font:inherit;color:inherit}
 @keyframes modalIn{from{opacity:0;transform:translateY(16px) scale(.97)}to{opacity:1;transform:none}}
 .modal-hd{padding:var(--s-5) var(--s-5) var(--s-2)}
 .modal-title{font-size:16px;font-weight:760}
-.modal-desc{font-size:12.5px;color:var(--text-3);margin-top:3px;line-height:1.5}
-.modal-bd{padding:var(--s-4) var(--s-5)}
+.modal-desc{font-size:12.5px;color:var(--text-3);margin-top:4px;line-height:1.55}
 .modal-ft{display:flex;gap:var(--s-2);padding:var(--s-4) var(--s-5) var(--s-5)}
 .modal-ft .btn{flex:1}
 
 .preview-frame{width:100%;height:min(72vh,760px);border:0;background:#fff;border-radius:var(--r-md);display:block}
 .preview-shell{background:var(--surface);border:1px solid var(--line);border-radius:var(--r-md);padding:var(--s-2);box-shadow:var(--sh-1)}
 
-.seg{display:inline-flex;background:var(--surface-2);border:1px solid var(--line);border-radius:var(--r-sm);padding:3px;gap:2px}
-.seg button{height:32px;padding:0 14px;border-radius:9px;font-size:12.5px;font-weight:640;color:var(--text-2);transition:all var(--fast) var(--ease)}
+.seg{display:inline-flex;background:var(--surface-2);border:1px solid var(--line);border-radius:var(--r-sm);padding:3px;gap:2px;flex-wrap:wrap}
+.seg button{height:32px;padding:0 14px;border-radius:9px;font-size:12.5px;font-weight:640;color:var(--text-2);display:inline-flex;align-items:center;gap:6px;transition:all var(--fast) var(--ease)}
+.seg button .ic{width:14px;height:14px}
 .seg button.active{background:var(--surface);color:var(--text);box-shadow:var(--sh-1)}
 @media (prefers-color-scheme:light){.seg button.active{box-shadow:0 1px 3px rgba(15,23,42,.12)}}
 
-.hero{
-  position:relative;overflow:hidden;border-radius:var(--r-lg);
-  padding:var(--s-6);margin-bottom:var(--s-5);
-  background:var(--surface);border:1px solid var(--line);
-  box-shadow:var(--sh-2);
-}
-.hero::before{
-  content:'';position:absolute;inset:0;pointer-events:none;
-  background:radial-gradient(80% 130% at 100% 0%,rgba(139,92,246,.20),transparent 62%),
-             radial-gradient(70% 120% at 0% 100%,rgba(34,211,238,.13),transparent 60%);
-}
+.hero{position:relative;overflow:hidden;border-radius:var(--r-lg);padding:var(--s-6);margin-bottom:var(--s-5);background:var(--surface);border:1px solid var(--line);box-shadow:var(--sh-2)}
+.hero::before{content:'';position:absolute;inset:0;pointer-events:none;background:radial-gradient(80% 130% at 100% 0%,rgba(139,92,246,.20),transparent 62%),radial-gradient(70% 120% at 0% 100%,rgba(34,211,238,.13),transparent 60%)}
 .hero-in{position:relative;display:flex;align-items:center;justify-content:space-between;gap:var(--s-5);flex-wrap:wrap}
 .hero-title{font-size:22px;font-weight:820;letter-spacing:-.5px;line-height:1.3}
 .hero-title .grad{background:var(--grad-brand);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
 .hero-sub{font-size:13px;color:var(--text-2);margin-top:6px;max-width:430px;line-height:1.6}
 .hero-actions{display:flex;gap:var(--s-2);flex-wrap:wrap}
-.hero-pulse{display:inline-flex;align-items:center;gap:6px;font-size:11.5px;font-weight:650;color:var(--ok);background:var(--ok-soft);padding:4px 10px;border-radius:var(--r-full);margin-bottom:var(--s-3)}
-.hero-pulse i{width:6px;height:6px;border-radius:50%;background:var(--ok);animation:pulse 1.8s ease-in-out infinite;display:block}
+.hero-pulse{display:inline-flex;align-items:center;gap:6px;font-size:11.5px;font-weight:650;padding:4px 10px;border-radius:var(--r-full);margin-bottom:var(--s-3)}
+.hero-pulse.ok{color:var(--ok);background:var(--ok-soft)}
+.hero-pulse.warn{color:var(--warn);background:var(--warn-soft)}
+.hero-pulse i{width:6px;height:6px;border-radius:50%;background:currentColor;animation:pulse 1.8s ease-in-out infinite;display:block}
 @keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.35;transform:scale(.8)}}
 
-.sticky-actions{
-  position:sticky;bottom:0;z-index:20;
-  display:flex;gap:var(--s-2);padding:var(--s-3) 0;
-  background:color-mix(in srgb,var(--bg) 88%,transparent);
-  backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);
-  border-top:1px solid var(--line);
-}
+.sticky-actions{position:sticky;bottom:0;z-index:20;display:flex;gap:var(--s-2);padding:var(--s-3) 0;background:color-mix(in srgb,var(--bg) 88%,transparent);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);border-top:1px solid var(--line)}
 .sticky-actions .btn{flex:1}
 
-.divider{height:1px;background:var(--line);margin:var(--s-4) 0}
 .mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px}
 .muted{color:var(--text-3)}
 .mt-3{margin-top:var(--s-3)}
@@ -223,42 +385,91 @@ input,select,textarea{font:inherit;color:inherit}
   .hero-in{gap:var(--s-4)}
   .hero-actions{width:100%}
   .hero-actions .btn{flex:1}
+  .list-item{padding:12px var(--s-4)}
 }
 @media (max-width:420px){
-  .page-head{gap:var(--s-3)}
   .page-head-actions{width:100%}
   .page-head-actions .btn{flex:1}
   .btn{padding:0 var(--s-3)}
+  .seg{width:100%}
+  .seg button{flex:1;justify-content:center}
 }
-
 </style>
 </head>
 <body>
+<svg xmlns="http://www.w3.org/2000/svg" style="display:none" aria-hidden="true" id="icon-sprite">
+<defs>
+  <symbol id="i-dashboard" viewBox="0 0 24 24"><path d="M3 13h8V3H3v10zm0 8h8v-6H3v6zm10 0h8V11h-8v10zm0-18v6h8V3h-8z"/></symbol>
+  <symbol id="i-settings" viewBox="0 0 24 24"><path d="M19.4 13a7.7 7.7 0 0 0 0-2l2.1-1.6a.5.5 0 0 0 .1-.7l-2-3.4a.5.5 0 0 0-.6-.2l-2.5 1a7.6 7.6 0 0 0-1.7-1L14.4 2a.5.5 0 0 0-.5-.4h-4a.5.5 0 0 0-.5.4l-.4 2.7c-.6.2-1.2.6-1.7 1l-2.5-1a.5.5 0 0 0-.6.2l-2 3.4a.5.5 0 0 0 .1.7L4.6 11a7.7 7.7 0 0 0 0 2l-2.1 1.6a.5.5 0 0 0-.1.7l2 3.4c.1.2.4.3.6.2l2.5-1c.5.4 1.1.8 1.7 1l.4 2.7c0 .2.2.4.5.4h4c.3 0 .5-.2.5-.4l.4-2.7c.6-.2 1.2-.6 1.7-1l2.5 1c.2.1.5 0 .6-.2l2-3.4a.5.5 0 0 0-.1-.7L19.4 13zM12 15.5A3.5 3.5 0 1 1 12 8.5a3.5 3.5 0 0 1 0 7z"/></symbol>
+  <symbol id="i-cpu" viewBox="0 0 24 24"><path d="M9 2v2H7a3 3 0 0 0-3 3v2H2v2h2v2H2v2h2v2a3 3 0 0 0 3 3h2v2h2v-2h2v2h2v-2h2a3 3 0 0 0 3-3v-2h2v-2h-2v-2h2V9h-2V7a3 3 0 0 0-3-3h-2V2h-2v2h-2V2H9zm.5 6h5a1.5 1.5 0 0 1 1.5 1.5v5a1.5 1.5 0 0 1-1.5 1.5h-5A1.5 1.5 0 0 1 8 14.5v-5A1.5 1.5 0 0 1 9.5 8z"/></symbol>
+  <symbol id="i-history" viewBox="0 0 24 24"><path d="M13 3a9 9 0 1 0 8.9 10.5h-2.1A7 7 0 1 1 13 5v3.5L17.5 4 13 .5V3zm-1 4.5v5.2l4.2 2.5.8-1.3-3.5-2.1V7.5H12z"/></symbol>
+  <symbol id="i-eye" viewBox="0 0 24 24"><path d="M12 5C6.5 5 2.2 9.1 1 12c1.2 2.9 5.5 7 11 7s9.8-4.1 11-7c-1.2-2.9-5.5-7-11-7zm0 11.5A4.5 4.5 0 1 1 12 7.5a4.5 4.5 0 0 1 0 9zm0-2a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5z"/></symbol>
+  <symbol id="i-eye-off" viewBox="0 0 24 24"><path d="M2.4 3.8 3.8 2.4l17.8 17.8-1.4 1.4-3.1-3.1A11 11 0 0 1 12 19C6.5 19 2.2 14.9 1 12a13 13 0 0 1 4.3-5.9L2.4 3.8zm6 6 1.9 1.9a2.5 2.5 0 0 0 3.4 3.4l1.9 1.9A4.5 4.5 0 0 1 8.4 9.8zM12 5c5.5 0 9.8 4.1 11 7a13 13 0 0 1-3.2 4.6l-2.2-2.2A7 7 0 0 0 8.6 7.2L7.1 5.7A11 11 0 0 1 12 5z"/></symbol>
+  <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M12 5V2L7.5 6 12 10V7a5 5 0 1 1-5 5H4a8 8 0 1 0 8-8z"/></symbol>
+  <symbol id="i-send" viewBox="0 0 24 24"><path d="M2 21 23 12 2 3v7l15 2-15 2v7z"/></symbol>
+  <symbol id="i-inbox" viewBox="0 0 24 24"><path d="M19 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V5a2 2 0 0 0-2-2zm0 11h-4.3a4 4 0 0 1-7.4 0H3V5h16v9z"/></symbol>
+  <symbol id="i-outbox" viewBox="0 0 24 24"><path d="M20 4H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2zm0 4-8 5L4 8V6l8 5 8-5v2z"/></symbol>
+  <symbol id="i-warning" viewBox="0 0 24 24"><path d="M12 2 1 21h22L12 2zm1 14h-2v2h2v-2zm0-7h-2v5h2V9z"/></symbol>
+  <symbol id="i-check-circle" viewBox="0 0 24 24"><path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm-2 15-5-5 1.4-1.4L10 14.2l7.6-7.6L19 8l-9 9z"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="M9 16.2 4.8 12l-1.4 1.4L9 19 21 7l-1.4-1.4L9 16.2z"/></symbol>
+  <symbol id="i-close" viewBox="0 0 24 24"><path d="M19 6.4 17.6 5 12 10.6 6.4 5 5 6.4 10.6 12 5 17.6 6.4 19 12 13.4 17.6 19 19 17.6 13.4 12 19 6.4z"/></symbol>
+  <symbol id="i-plus-info" viewBox="0 0 24 24"><path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/></symbol>
+  <symbol id="i-sunrise" viewBox="0 0 24 24"><path d="M12 6a6 6 0 0 1 6 6h2a8 8 0 1 0-16 0h2a6 6 0 0 1 6-6zm-1-4h2v3h-2V2zM4.2 6.6l1.4-1.4 2.1 2.1-1.4 1.4-2.1-2.1zm13.1.7 2.1-2.1 1.4 1.4-2.1 2.1-1.4-1.4zM2 13h3v2H2v-2zm17 0h3v2h-3v-2zM3 20h18v2H3v-2zm9-7a3 3 0 0 1 3 3H9a3 3 0 0 1 3-3z"/></symbol>
+  <symbol id="i-sun" viewBox="0 0 24 24"><path d="M12 7a5 5 0 1 0 0 10 5 5 0 0 0 0-10zm0-5h0v3h0V2zm0 17v3h0v-3zm10-7h-3v0h3v0zM5 12H2v0h3v0zm12.7-6.7-2.1 2.1 1.4 1.4 2.1-2.1-1.4-1.4zM7.4 16.6l-2.1 2.1 1.4 1.4 2.1-2.1-1.4-1.4zm9.2 0-1.4 1.4 2.1 2.1 1.4-1.4-2.1-2.1zM7.4 7.4 5.3 5.3 3.9 6.7l2.1 2.1 1.4-1.4z"/></symbol>
+  <symbol id="i-sunset" viewBox="0 0 24 24"><path d="M3 20h18v2H3v-2zm9-16a6 6 0 0 1 6 6H6a6 6 0 0 1 6-6zM2 13h3v2H2v-2zm17 0h3v2h-3v-2zM4.2 6.6l1.4-1.4 2.1 2.1-1.4 1.4-2.1-2.1zm13.1.7 2.1-2.1 1.4 1.4-2.1 2.1-1.4-1.4zM11 2h2v3h-2V2z"/></symbol>
+  <symbol id="i-moon" viewBox="0 0 24 24"><path d="M13 2a10 10 0 1 0 9 14.2A8.5 8.5 0 0 1 13 2z"/></symbol>
+  <symbol id="i-clock" viewBox="0 0 24 24"><path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm1 10.6 3.7 2.2-.9 1.5L11 14V6h2v6.6z"/></symbol>
+  <symbol id="i-mail" viewBox="0 0 24 24"><path d="M20 4H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2zm0 4-8 5-8-5V6l8 5 8-5v2z"/></symbol>
+  <symbol id="i-list" viewBox="0 0 24 24"><path d="M3 5h18v2H3V5zm0 6h18v2H3v-2zm0 6h18v2H3v-2z"/></symbol>
+  <symbol id="i-monitor" viewBox="0 0 24 24"><path d="M21 3H3a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2h7v2H8v2h8v-2h-2v-2h7a2 2 0 0 0 2-2V5a2 2 0 0 0-2-2zm0 13H3V5h18v11z"/></symbol>
+  <symbol id="i-package" viewBox="0 0 24 24"><path d="M12 2 2 7v10l10 5 10-5V7L12 2zm0 2.3 6.9 3.5L12 11.3 5.1 7.8 12 4.3zm-8 5 7 3.5v7.8l-7-3.5V9.3zm9 11.3v-7.8l7-3.5v7.8l-7 3.5z"/></symbol>
+  <symbol id="i-flask" viewBox="0 0 24 24"><path d="M14 3V2h-4v1H8v2h1v4.3l-4.6 8.4A2 2 0 0 0 6.2 21h11.6a2 2 0 0 0 1.8-3.3L15 9.3V5h1V3h-2zM9 9.8V5h6v4.8l1.6 3H7.4L9 9.8z"/></symbol>
+  <symbol id="i-trash" viewBox="0 0 24 24"><path d="M6 19a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></symbol>
+  <symbol id="i-image" viewBox="0 0 24 24"><path d="M21 3H3a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h18a2 2 0 0 0 2-2V5a2 2 0 0 0-2-2zm0 16H3l5-6 4 5 3-4 4 5zM8.5 10a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3z"/></symbol>
+  <symbol id="i-save" viewBox="0 0 24 24"><path d="M17 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V7l-4-4zm-5 16a3 3 0 1 1 0-6 3 3 0 0 1 0 6zm3-10H5V5h10v4z"/></symbol>
+  <symbol id="i-doc" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z"/></symbol>
+  <symbol id="i-stethoscope" viewBox="0 0 24 24"><path d="M19 8a3 3 0 0 0-1 .2V4h-2v9a4 4 0 0 1-8 0V4H6v9a6 6 0 0 0 5 5.9V21a4 4 0 0 0 8 0v-2h-2v2a2 2 0 0 1-4 0v-2.1A6 6 0 0 0 18 13V9.8c.3.1.7.2 1 .2a3 3 0 0 0 0-6zm0 4a1 1 0 1 1 0-2 1 1 0 0 1 0 2z"/></symbol>
+  <symbol id="i-puzzle" viewBox="0 0 24 24"><path d="M20.5 11H19V7a2 2 0 0 0-2-2h-4V3.5a2.5 2.5 0 0 0-5 0V5H4a2 2 0 0 0-2 2v3.8h1.5a2.7 2.7 0 0 1 0 5.4H2V20a2 2 0 0 0 2 2h3.8v-1.5a2.7 2.7 0 0 1 5.4 0V22H17a2 2 0 0 0 2-2v-4h1.5a2.5 2.5 0 0 0 0-5z"/></symbol>
+  <symbol id="i-rocket" viewBox="0 0 24 24"><path d="M12 2c-2.5 2-4 5-4 8 0 1.4.4 2.7 1 3.9l-2 5.1 4.6-2.3c.3.1.6.2 1 .3l-.6 3h1.9l3-3c3-1.2 5.1-4.2 5.1-7.7 0-3.5-1.5-5.8-4-7.3C16.5 2.5 14 2 12 2zm2 6a1.5 1.5 0 1 1 0 3 1.5 1.5 0 0 1 0-3z"/></symbol>
+  <symbol id="i-arrow-right" viewBox="0 0 24 24"><path d="M8.6 16.6 13.2 12 8.6 7.4 10 6l6 6-6 6-1.4-1.4z"/></symbol>
+  <symbol id="i-empty-box" viewBox="0 0 24 24"><path d="M19 4H5a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2zm0 14H5V6h14v12zM7 10h10v2H7v-2z"/></symbol>
+  <symbol id="i-newspaper" viewBox="0 0 24 24"><path d="M22 3H2v16a2 2 0 0 0 2 2h17a1 1 0 0 0 1-1V3zM4 19V5h16v14H4zm2-9h6v2H6v-2zm0 4h10v2H6v-2zm8-4h4v2h-4v-2z"/></symbol>
+  <symbol id="i-bolt" viewBox="0 0 24 24"><path d="M11 21 12.5 14H8l7-11-1.5 7H18l-7 11z"/></symbol>
+  <symbol id="i-chart" viewBox="0 0 24 24"><path d="M4 20h16v2H2V2h2v18zm3-3V9h3v8H7zm5 0V4h3v13h-3zm5 0v-5h3v5h-3z"/></symbol>
+  <symbol id="i-code" viewBox="0 0 24 24"><path d="M9.4 16.6 4.8 12l4.6-4.6L8 6l-6 6 6 6 1.4-1.4zm5.2 0 4.6-4.6-4.6-4.6L16 6l6 6-6 6-1.4-1.4z"/></symbol>
+  <symbol id="i-globe" viewBox="0 0 24 24"><path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm6.9 6h-2.6a15 15 0 0 0-1.3-3.2A8 8 0 0 1 18.9 8zM12 4.1c.6.9 1.2 2.2 1.6 3.9h-3.2c.4-1.7 1-3 1.6-3.9zM4.3 14a8 8 0 0 1 0-4h3a17 17 0 0 0 0 4h-3zm.8 2h2.6c.3 1.2.7 2.3 1.3 3.2A8 8 0 0 1 5.1 16zm2.6-8H5.1a8 8 0 0 1 3.9-3.2A15 15 0 0 0 7.7 8zM12 19.9c-.6-.9-1.2-2.2-1.6-3.9h3.2c-.4 1.7-1 3-1.6 3.9zm2-5.9H10a15 15 0 0 1 0-4h4a15 15 0 0 1 0 4zm.4 5.2c.6-.9 1-2 1.3-3.2h2.6a8 8 0 0 1-3.9 3.2zm1.6-5.2a17 17 0 0 0 0-4h3a8 8 0 0 1 0 4h-3z"/></symbol>
+  <symbol id="i-coin" viewBox="0 0 24 24"><path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm1 15.9V19h-2v-1.1c-1.7-.3-3-1.3-3.3-3h2c.2.8 1 1.3 2.3 1.3 1.2 0 2-.5 2-1.3 0-.7-.5-1.1-2.1-1.5-2.3-.5-4-1.2-4-3.3 0-1.6 1.2-2.7 3.1-3V5h2v2.1c1.6.3 2.7 1.3 3 2.9h-2c-.2-.7-.8-1.2-2-1.2-1.1 0-1.9.4-1.9 1.1 0 .7.7 1 2.2 1.4 2.4.5 3.9 1.3 3.9 3.4 0 1.7-1.3 2.8-3.2 3.2z"/></symbol>
+  <symbol id="i-quote" viewBox="0 0 24 24"><path d="M6 17h3l2-4V7H5v6h3l-2 4zm8 0h3l2-4V7h-6v6h3l-2 4z"/></symbol>
+  <symbol id="i-space" viewBox="0 0 24 24"><path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm0 3.5 1.6 3.6 3.9.4-2.9 2.6.8 3.8L12 14l-3.4 1.9.8-3.8-2.9-2.6 3.9-.4L12 5.5z"/></symbol>
+</defs>
+</svg>
+
 <div class="loading-bar" id="loadingBar"></div>
+
 <div class="app">
   <aside class="sidebar">
     <div class="brand">
-      <div class="brand-logo">📰</div>
+      <div class="brand-logo"><svg class="ic ic-l"><use href="#i-newspaper"/></svg></div>
       <div>
         <div class="brand-name">LumaPost</div>
-        <div class="brand-sub">光影邮报</div>
+        <div class="brand-sub">GuanGying Post</div>
       </div>
     </div>
     <nav class="nav" id="sideNav"></nav>
     <div class="sidebar-foot">
-      <button class="btn btn-primary" data-act="fetch">🚀 立即抓取</button>
+      <button class="btn btn-primary" data-act="fetch"><svg class="ic"><use href="#i-rocket"/></svg>立即抓取</button>
     </div>
   </aside>
 
   <div class="main">
     <header class="topbar">
       <div class="brand">
-        <div class="brand-logo">📰</div>
-        <div><div class="brand-name">LumaPost</div></div>
+        <div class="brand-logo"><svg class="ic"><use href="#i-newspaper"/></svg></div>
+        <div class="brand-name">LumaPost</div>
       </div>
       <div class="topbar-actions">
-        <button class="icon-btn" data-act="fetch" title="立即抓取">🚀</button>
-        <button class="icon-btn" data-act="reload" title="刷新">↻</button>
+        <button class="icon-btn" data-act="fetch" aria-label="立即抓取"><svg class="ic"><use href="#i-rocket"/></svg></button>
+        <button class="icon-btn" data-act="reload" aria-label="刷新"><svg class="ic"><use href="#i-refresh"/></svg></button>
       </div>
     </header>
     <div class="wrap" id="view"></div>
@@ -270,20 +481,20 @@ input,select,textarea{font:inherit;color:inherit}
 
 <script>
 /* ===========================================================
-   LumaPost Web UI v5 — App Logic
+   LumaPost Web UI v5.1 — App Logic (SVG icon edition)
    =========================================================== */
 const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => [...r.querySelectorAll(s)];
 const esc = (v) => String(v ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '"', "'": '&#39;' }[c]));
+const ic = (name, cls = '') => `<svg class="ic ${cls}" aria-hidden="true"><use href="#i-${name}"/></svg>`;
 
 const State = {
   page: 'dashboard',
   config: {},
   providers: [],
   models: [],
-  modelsFor: null,
+  previewPeriod: 'morning',
   history: { fetchHistory: [], sendHistory: [] },
-  dirty: false,
   loading: 0,
 };
 
@@ -305,11 +516,11 @@ const API = {
 };
 
 /* ---------- Feedback ---------- */
-const ICONS = { ok: '✓', err: '✕', info: 'i', warn: '!' };
+const TOAST_ICON = { ok: 'check-circle', err: 'close', info: 'plus-info', warn: 'warning' };
 function toast(msg, type = 'info') {
   const el = document.createElement('div');
   el.className = `toast ${type}`;
-  el.innerHTML = `<span class="ico">${ICONS[type] || ICONS.info}</span><span>${esc(msg)}</span>`;
+  el.innerHTML = `${ic(TOAST_ICON[type] || 'plus-info')}<span>${esc(msg)}</span>`;
   $('#toasts').appendChild(el);
   const t = setTimeout(dismiss, 3200);
   function dismiss() { clearTimeout(t); el.classList.add('out'); setTimeout(() => el.remove(), 260); }
@@ -321,13 +532,13 @@ function busy(on) {
 }
 const buzz = () => { try { navigator.vibrate?.(8); } catch {} };
 
-function skeleton(rows = 3) {
+function skeleton(rows = 4) {
   return `<div class="card card-bd">${Array.from({ length: rows }, (_, i) =>
     `<div class="sk sk-line ${i % 2 ? 'w60' : ''}"></div>`).join('')}</div>`;
 }
-function emptyState(ico, title, desc, actionHtml = '') {
+function emptyState(icon, title, desc, actionHtml = '') {
   return `<div class="empty">
-    <div class="empty-ico">${ico}</div>
+    <div class="empty-ico">${ic(icon)}</div>
     <div class="empty-title">${esc(title)}</div>
     <div class="empty-desc">${esc(desc)}</div>
     ${actionHtml ? `<div class="mt-3">${actionHtml}</div>` : ''}
@@ -336,19 +547,19 @@ function emptyState(ico, title, desc, actionHtml = '') {
 
 /* ---------- Navigation ---------- */
 const NAV = [
-  { key: 'dashboard', label: '仪表盘', icon: '📊' },
-  { key: 'config', label: '配置', icon: '⚙️' },
-  { key: 'providers', label: '提供商', icon: '🤖' },
-  { key: 'history', label: '历史', icon: '🕘' },
-  { key: 'preview', label: '预览', icon: '👁️' },
+  { key: 'dashboard', label: '仪表盘', icon: 'dashboard' },
+  { key: 'config', label: '配置', icon: 'settings' },
+  { key: 'providers', label: '提供商', icon: 'cpu' },
+  { key: 'history', label: '历史', icon: 'history' },
+  { key: 'preview', label: '预览', icon: 'eye' },
 ];
 
 function renderNav() {
-  $('#sideNav').innerHTML = `<div class="nav-label">主页</div>` +
+  $('#sideNav').innerHTML = `<div class="nav-label">导航</div>` +
     NAV.map(n => `<button class="nav-item ${State.page === n.key ? 'active' : ''}" data-nav="${n.key}">
-      <span class="ico">${n.icon}</span><span>${n.label}</span></button>`).join('');
+      ${ic(n.icon)}<span>${n.label}</span></button>`).join('');
   $('#tabBar').innerHTML = NAV.map(n => `<button class="tab-item ${State.page === n.key ? 'active' : ''}" data-nav="${n.key}">
-      <span class="ico">${n.icon}</span><span>${n.label}</span></button>`).join('');
+      ${ic(n.icon)}<span>${n.label}</span></button>`).join('');
 }
 
 function go(page) {
@@ -356,20 +567,20 @@ function go(page) {
   State.page = page;
   renderNav();
   render();
-  window.scrollTo({ top: 0, behavior: 'instant' in window ? 'instant' : 'auto' });
+  window.scrollTo(0, 0);
 }
 
 /* ---------- Router ---------- */
 async function render() {
   const view = $('#view');
-  view.innerHTML = skeleton(4);
+  view.innerHTML = skeleton(5);
   const fn = { dashboard: pageDashboard, config: pageConfig, providers: pageProviders, history: pageHistory, preview: pagePreview }[State.page];
   try {
     view.innerHTML = await fn();
     bind();
   } catch (e) {
-    view.innerHTML = `<div class="card card-bd">${emptyState('⚠️', '加载失败', e.message,
-      `<button class="btn btn-secondary btn-sm" data-act="reload">重试</button>`)}</div>`;
+    view.innerHTML = `<div class="card">${emptyState('warning', '加载失败', e.message,
+      `<button class="btn btn-secondary btn-sm" data-act="reload">${ic('refresh')}重试</button>`)}</div>`;
     bind();
     toast('加载失败: ' + e.message, 'err');
   }
@@ -385,7 +596,7 @@ function pageHead(title, desc, actions = '') {
 function section(title, body, icon = '', right = '') {
   return `<div class="section">
     <div class="section-head">
-      <div class="section-title">${icon ? `<span class="ico">${icon}</span>` : ''}${esc(title)}</div>
+      <div class="section-title">${icon ? ic(icon) : ''}${esc(title)}</div>
       ${right}
     </div>${body}</div>`;
 }
@@ -399,59 +610,61 @@ async function pageDashboard() {
   const c = State.config;
   const enabled = c.sections?.enabled?.length || 0;
   const headlines = news.headline || [];
-  const stat = (ico, cls, val, label) =>
-    `<div class="stat"><div class="stat-ico ${cls}">${ico}</div>
+  const stat = (icon, cls, val, label) =>
+    `<div class="stat"><div class="stat-ico ${cls}">${ic(icon)}</div>
       <div class="stat-val">${esc(val)}</div><div class="stat-label">${esc(label)}</div></div>`;
 
   const hero = `<div class="hero"><div class="hero-in">
     <div>
-      <div class="hero-pulse"><i></i>${val.valid ? '系统运行正常' : '配置待完善'}</div>
-      <div class="hero-title">你好，欢迎回到 <span class="grad">LumaPost</span></div>
-      <div class="hero-sub">AI 驱动的智能新闻邮件系统 · 每日 4 次自动推送 · 多提供商自由切换</div>
+      <div class="hero-pulse ${val.valid ? 'ok' : 'warn'}"><i></i>${val.valid ? '系统运行正常' : '配置待完善'}</div>
+      <div class="hero-title">欢迎回到 <span class="grad">LumaPost</span> 光影邮报</div>
+      <div class="hero-sub">AI 驱动的智能新闻邮件系统，每日四次自动推送，多提供商自由切换。</div>
     </div>
     <div class="hero-actions">
-      <button class="btn btn-primary btn-lg" data-act="fetch">🚀 立即抓取</button>
-      <button class="btn btn-secondary btn-lg" data-act="nav" data-to="preview">👁️ 预览邮件</button>
+      <button class="btn btn-primary btn-lg" data-act="fetch">${ic('rocket')}立即抓取</button>
+      <button class="btn btn-secondary btn-lg" data-act="nav" data-to="preview">${ic('eye')}预览邮件</button>
     </div>
   </div></div>`;
 
   const banner = val.valid
-    ? `<div class="banner ok"><div class="banner-ico">✅</div><div>
+    ? `<div class="banner ok"><div class="banner-ico">${ic('check-circle')}</div><div>
         <div class="banner-title">配置完整可用</div>
         <div class="banner-desc">AI 与邮件服务均已配置，可以正常执行抓取与发送任务。</div></div></div>`
-    : `<div class="banner warn"><div class="banner-ico">⚠️</div><div>
+    : `<div class="banner warn"><div class="banner-ico">${ic('warning')}</div><div>
         <div class="banner-title">配置不完整</div>
         <div class="banner-desc">${esc((val.errors || []).join(' · ') || '请前往配置页面补全信息')}</div>
-        <div class="mt-3"><button class="btn btn-sm btn-secondary" data-act="nav" data-to="config">前往配置 →</button></div></div></div>`;
+        <div class="mt-3"><button class="btn btn-sm btn-secondary" data-act="nav" data-to="config">前往配置${ic('arrow-right')}</button></div></div></div>`;
 
   const newsList = headlines.length
     ? `<div class="card"><div class="list">${headlines.slice(0, 5).map((h, i) => `
         <div class="list-item">
-          <div class="li-av">${i + 1}</div>
+          <div class="li-av">${String(i + 1).padStart(2, '0')}</div>
           <div class="li-main">
             <div class="li-title">${esc(h.title || '无标题')}</div>
             <div class="li-meta"><span>${esc(h.source || '综合')}</span>
-              ${h.verified ? '<span class="badge ok"><i class="dot"></i>已核实</span>' : ''}</div>
+              ${h.verified ? `<span class="badge ok">${ic('check')}已核实</span>` : ''}</div>
           </div>
         </div>`).join('')}</div></div>`
-    : `<div class="card">${emptyState('📰', '暂无新闻数据', '点击「立即抓取」开始第一次新闻采集，或先完成配置。',
-        `<button class="btn btn-primary btn-sm" data-act="fetch">🚀 开始抓取</button>`)}</div>`;
+    : `<div class="card">${emptyState('newspaper', '暂无新闻数据', '点击「立即抓取」开始第一次新闻采集，或先完成配置。',
+        `<button class="btn btn-primary btn-sm" data-act="fetch">${ic('rocket')}开始抓取</button>`)}</div>`;
 
-  return pageHead('仪表盘', '系统概览与运行状态', `<button class="btn btn-secondary btn-sm" data-act="reload">↻ 刷新</button>`) + hero +
+  return pageHead('仪表盘', '系统概览与运行状态',
+    `<button class="btn btn-secondary btn-sm" data-act="reload">${ic('refresh')}刷新</button>`) + hero +
     `<div class="stats" style="margin-bottom:var(--s-5)">
-      ${stat('🤖', 'brand', c.ai?.provider || '未设置', 'AI 提供商')}
-      ${stat('📮', 'ok', c.mail?.provider || '未设置', '邮件服务')}
-      ${stat('⏰', 'warn', c.schedule?.morning || '06:00', '早报时间')}
-      ${stat('📋', 'info', enabled + ' 个', '新闻版块')}
+      ${stat('cpu', 'brand', c.ai?.provider || '未设置', 'AI 提供商')}
+      ${stat('mail', 'ok', c.mail?.provider || '未设置', '邮件服务')}
+      ${stat('clock', 'warn', c.schedule?.morning || '06:00', '早报时间')}
+      ${stat('list', 'info', enabled + ' 个', '新闻版块')}
     </div>` +
-    section('系统状态', banner, '🩺') +
-    section('最新头条', newsList, '📰',
-      `<button class="btn btn-ghost btn-sm" data-act="nav" data-to="history">全部 →</button>`);
+    section('系统状态', banner, 'stethoscope') +
+    section('最新头条', newsList, 'newspaper',
+      `<button class="btn btn-ghost btn-sm" data-act="nav" data-to="history">全部${ic('arrow-right')}</button>`);
 }
 
 /* ============ Config ============ */
 const AI_FALLBACK = ['deepseek', 'openai', 'anthropic', 'google', 'qwen', 'kimi', 'doubao', 'zhipu', 'xai'];
-const MAIL_FALLBACK = ['qq', 'netease', 'gmail', 'outlook'];
+const MAIL_MAP = { qq: 'QQ 邮箱', netease: '网易 163', gmail: 'Gmail', outlook: 'Outlook' };
+const PROVIDER_ICON = { deepseek: 'cpu', openai: 'bolt', anthropic: 'puzzle', google: 'globe', qwen: 'code', kimi: 'moon', doubao: 'package', zhipu: 'code', xai: 'bolt' };
 
 function opt(val, label, cur) {
   return `<option value="${esc(val)}"${cur === val ? ' selected' : ''}>${esc(label)}</option>`;
@@ -462,12 +675,13 @@ async function pageConfig() {
     try { State.providers = (await API.get('/api/providers')).providers || []; } catch { State.providers = []; }
   }
   const c = State.config;
-  const aiKeys = (State.providers.length ? State.providers.map(p => p.key) : AI_FALLBACK);
-  const aiNames = State.providers.length ? State.providers.map(p => ({ k: p.key, n: p.name })) : AI_FALLBACK.map(k => ({ k, n: k }));
+  const aiNames = State.providers.length
+    ? State.providers.map(p => ({ k: p.key, n: p.name || p.key }))
+    : AI_FALLBACK.map(k => ({ k, n: k }));
 
   const aiCard = `<div class="card"><div class="card-bd">
     <div class="field">
-      <label class="label">AI 提供商 <span class="label-hint">可自动拉取模型</span></label>
+      <label class="label">AI 提供商 <span class="label-hint">支持自动拉取模型</span></label>
       <select class="select" id="f-ai-provider">
         ${aiNames.map(p => opt(p.k, p.n, c.ai?.provider)).join('')}
       </select>
@@ -475,22 +689,22 @@ async function pageConfig() {
     <div class="field">
       <label class="label">API Key</label>
       <div class="input-wrap">
-        <input class="input" id="f-ai-key" type="password" value="${esc(c.ai?.apiKey || '')}" placeholder="sk-..." autocomplete="off">
-        <button class="input-eye" data-act="eye" data-target="f-ai-key" type="button">👁️</button>
+        <input class="input" id="f-ai-key" type="password" value="${esc(c.ai?.apiKey || '')}" placeholder="sk-..." autocomplete="off" spellcheck="false">
+        <button class="input-eye" data-act="eye" data-target="f-ai-key" type="button" aria-label="显示或隐藏密钥">${ic('eye')}</button>
       </div>
     </div>
     <div class="field">
       <label class="label">模型 <span class="label-hint">留空使用默认</span></label>
-      <div class="input-wrap" style="display:flex;gap:8px">
+      <div style="display:flex;gap:8px">
         <input class="input" id="f-ai-model" value="${esc(c.ai?.model || '')}" placeholder="默认模型">
-        <button class="btn btn-secondary" data-act="loadmodels" type="button" style="flex:0 0 auto">拉取</button>
+        <button class="btn btn-secondary" data-act="loadmodels" type="button" style="flex:0 0 auto">${ic('refresh')}拉取</button>
       </div>
       <div class="chips mt-3" id="modelChips"></div>
     </div>
     <div class="field">
-      <label class="label">Temperature <span class="range-val" id="tempVal">${(c.ai?.temperature ?? 0.7)}</span></label>
+      <label class="label">Temperature <span class="range-val" id="tempVal">${c.ai?.temperature ?? 0.7}</span></label>
       <input class="range" id="f-ai-temp" type="range" min="0" max="2" step="0.1" value="${c.ai?.temperature ?? 0.7}">
-      <div class="li-meta" style="justify-content:space-between"><span>精确 0</span><span>创造 2</span></div>
+      <div class="range-legend"><span>精确 0</span><span>均衡 1</span><span>创造 2</span></div>
     </div>
   </div></div>`;
 
@@ -498,18 +712,18 @@ async function pageConfig() {
     <div class="field">
       <label class="label">邮件服务商</label>
       <select class="select" id="f-mail-provider">
-        ${MAIL_FALLBACK.map(k => opt(k, ({ qq: 'QQ 邮箱', netease: '网易 163', gmail: 'Gmail', outlook: 'Outlook' })[k], c.mail?.provider)).join('')}
+        ${Object.keys(MAIL_MAP).map(k => opt(k, MAIL_MAP[k], c.mail?.provider)).join('')}
       </select>
     </div>
     <div class="field">
       <label class="label">发件邮箱</label>
-      <input class="input" id="f-mail-user" type="email" value="${esc(c.mail?.user || '')}" placeholder="you@example.com">
+      <input class="input" id="f-mail-user" type="email" value="${esc(c.mail?.user || '')}" placeholder="you@example.com" autocomplete="off">
     </div>
     <div class="field">
       <label class="label">授权码 / 密码</label>
       <div class="input-wrap">
         <input class="input" id="f-mail-pass" type="password" value="${esc(c.mail?.pass || '')}" placeholder="SMTP 授权码" autocomplete="off">
-        <button class="input-eye" data-act="eye" data-target="f-mail-pass" type="button">👁️</button>
+        <button class="input-eye" data-act="eye" data-target="f-mail-pass" type="button" aria-label="显示或隐藏密码">${ic('eye')}</button>
       </div>
     </div>
     <div class="field">
@@ -518,24 +732,24 @@ async function pageConfig() {
     </div>
   </div></div>`;
 
-  const times = [['morning', '🌅 早报'], ['noon', '☀️ 午报'], ['afternoon', '🌇 午后'], ['evening', '🌙 晚间']];
+  const times = [['morning', '早报', 'sunrise'], ['noon', '午报', 'sun'], ['afternoon', '午后', 'sunset'], ['evening', '晚间', 'moon']];
   const schCard = `<div class="card"><div class="card-bd">
     <div class="form-row">
-      ${times.map(([k, l]) => `<div class="field">
-        <label class="label">${l}</label>
+      ${times.map(([k, l, i]) => `<div class="field">
+        <label class="label">${ic(i)}${l}</label>
         <input class="input" id="f-sch-${k}" type="time" value="${esc(c.schedule?.[k] || '')}">
       </div>`).join('')}
     </div>
   </div></div>`;
 
   return pageHead('配置', 'AI、邮件与定时任务设置') +
-    section('AI 设置', aiCard, '🤖') +
-    section('邮件设置', mailCard, '📮') +
-    section('定时任务', schCard, '⏰') +
+    section('AI 设置', aiCard, 'cpu') +
+    section('邮件设置', mailCard, 'mail') +
+    section('定时任务', schCard, 'clock') +
     `<div class="sticky-actions">
-      <button class="btn btn-primary" data-act="save">💾 保存配置</button>
-      <button class="btn btn-secondary" data-act="test-ai">🧪 测试 AI</button>
-      <button class="btn btn-secondary" data-act="test-mail">📧 测试邮件</button>
+      <button class="btn btn-primary" data-act="save">${ic('save')}保存配置</button>
+      <button class="btn btn-secondary" data-act="test-ai">${ic('flask')}测试 AI</button>
+      <button class="btn btn-secondary" data-act="test-mail">${ic('mail')}测试邮件</button>
     </div>`;
 }
 
@@ -564,21 +778,23 @@ async function pageProviders() {
   const grid = State.providers.length
     ? `<div class="provider-grid">${State.providers.map(p => `
         <button class="provider ${cur === p.key ? 'active' : ''}" data-pick="${esc(p.key)}">
-          <div class="provider-av">${esc((p.name || p.key).slice(0, 1).toUpperCase())}</div>
+          <span class="provider-check">${ic('check')}</span>
+          <div class="provider-av">${ic(PROVIDER_ICON[p.key] || 'cpu')}</div>
           <div class="provider-name">${esc(p.name || p.key)}</div>
           <div class="provider-model">${esc(p.defaultModel || '默认模型')}</div>
         </button>`).join('')}</div>`
-    : `<div class="card">${emptyState('🤖', '没有可用提供商', '请检查后端 providers 配置。')}</div>`;
+    : `<div class="card">${emptyState('cpu', '没有可用提供商', '请检查后端 providers 配置。')}</div>`;
 
-  return pageHead('AI 提供商', `共 ${State.providers.length} 家 · 点击选择后自动拉取模型`,
-    `<button class="btn btn-secondary btn-sm" data-act="nav" data-to="config">前往配置 →</button>`) +
-    section('选择提供商', grid, '🧩') +
-    section('可用模型', `<div class="card" id="modelBox">${emptyState('📋', '尚未选择提供商', '在上方点选一个提供商，即可加载模型列表。')}</div>`, '📦',
-      `<span class="badge brand" id="modelCount" style="display:none"></span>`);
+  return pageHead('AI 提供商', `共 ${State.providers.length} 家，点击选择后自动拉取模型`,
+    `<button class="btn btn-secondary btn-sm" data-act="nav" data-to="config">前往配置${ic('arrow-right')}</button>`) +
+    section('选择提供商', grid, 'puzzle') +
+    section('可用模型',
+      `<div class="card" id="modelBox">${emptyState('list', '尚未选择提供商', '在上方点选一个提供商，即可加载模型列表。')}</div>`,
+      'package', `<span class="badge brand hidden" id="modelCount"></span>`);
 }
 
-async function loadModels(providerKey, boxSel = '#modelBox') {
-  const box = $(boxSel);
+async function loadModels(providerKey) {
+  const box = $('#modelBox');
   if (!box) return;
   box.innerHTML = `<div class="card-bd">${Array.from({ length: 4 }, () => '<div class="sk sk-line"></div>').join('')}</div>`;
   try {
@@ -586,9 +802,8 @@ async function loadModels(providerKey, boxSel = '#modelBox') {
     const res = await API.get(`/api/models/${encodeURIComponent(providerKey)}`);
     busy(false);
     State.models = res.models || [];
-    State.modelsFor = providerKey;
     if (!State.models.length) {
-      box.innerHTML = emptyState('📭', '暂无模型', '该提供商可能需要先填写有效 API Key，或接口不支持列出模型。');
+      box.innerHTML = emptyState('empty-box', '暂无模型', '该提供商可能需要先填写有效 API Key，或接口不支持列出模型。');
       return;
     }
     const cur = State.config.ai?.model;
@@ -599,16 +814,16 @@ async function loadModels(providerKey, boxSel = '#modelBox') {
         <div class="li-main">
           <div class="li-title mono">${esc(id)}</div>
           <div class="li-meta">${m.name && m.name !== id ? `<span>${esc(m.name)}</span>` : ''}
-            ${m.context ? `<span>· 上下文 ${esc(m.context)}</span>` : ''}</div>
+            ${m.context ? `<span>上下文 ${esc(m.context)}</span>` : ''}</div>
         </div>
         <span class="li-radio"></span>
       </button>`;
     }).join('')}</div>`;
     const badge = $('#modelCount');
-    if (badge) { badge.style.display = ''; badge.textContent = `${State.models.length} 个模型`; }
+    if (badge) { badge.classList.remove('hidden'); badge.textContent = `${State.models.length} 个模型`; }
   } catch (e) {
     busy(false);
-    box.innerHTML = emptyState('⚠️', '模型加载失败', e.message);
+    box.innerHTML = emptyState('warning', '模型加载失败', e.message);
   }
 }
 
@@ -626,8 +841,8 @@ function renderModelChips() {
 async function pageHistory() {
   const h = await API.get('/api/config/history').catch(() => ({ fetchHistory: [], sendHistory: [] }));
   State.history = h;
-  const row = (it, ico) => `<div class="list-item">
-      <div class="li-av">${ico}</div>
+  const row = (it, icon) => `<div class="list-item">
+      <div class="li-av">${ic(icon)}</div>
       <div class="li-main">
         <div class="li-title">${esc(it.title || it.period || '任务记录')}</div>
         <div class="li-meta"><span>${esc(it.time ? new Date(it.time).toLocaleString('zh-CN') : '—')}</span></div>
@@ -636,45 +851,47 @@ async function pageHistory() {
     </div>`;
 
   const fetchList = h.fetchHistory?.length
-    ? `<div class="card"><div class="list">${h.fetchHistory.map(x => row(x, '📥')).join('')}</div></div>`
-    : `<div class="card">${emptyState('📥', '暂无抓取记录', '执行一次抓取任务后，记录会显示在这里。')}</div>`;
+    ? `<div class="card"><div class="list">${h.fetchHistory.map(x => row(x, 'inbox')).join('')}</div></div>`
+    : `<div class="card">${emptyState('inbox', '暂无抓取记录', '执行一次抓取任务后，记录会显示在这里。')}</div>`;
   const sendList = h.sendHistory?.length
-    ? `<div class="card"><div class="list">${h.sendHistory.map(x => row(x, '📤')).join('')}</div></div>`
-    : `<div class="card">${emptyState('📤', '暂无发送记录', '测试邮件或正式推送后，记录会显示在这里。')}</div>`;
+    ? `<div class="card"><div class="list">${h.sendHistory.map(x => row(x, 'outbox')).join('')}</div></div>`
+    : `<div class="card">${emptyState('outbox', '暂无发送记录', '测试邮件或正式推送后，记录会显示在这里。')}</div>`;
 
   return pageHead('历史记录', '抓取与发送任务日志',
-    `<button class="btn btn-danger btn-sm" data-act="clear-history">🗑 清空</button>`) +
-    section('抓取历史', fetchList, '📥') + section('发送历史', sendList, '📤');
+    `<button class="btn btn-danger btn-sm" data-act="clear-history">${ic('trash')}清空</button>`) +
+    section('抓取历史', fetchList, 'inbox') + section('发送历史', sendList, 'outbox');
 }
 
 /* ============ Preview ============ */
+const PERIODS = [['morning', '早报', 'sunrise'], ['noon', '午报', 'sun'], ['afternoon', '午后', 'sunset'], ['evening', '晚间', 'moon']];
+
 async function pagePreview() {
-  const periods = [['morning', '🌅 早报'], ['noon', '☀️ 午报'], ['afternoon', '🌇 午后'], ['evening', '🌙 晚间']];
   const cur = State.previewPeriod || 'morning';
   return pageHead('邮件预览', '选择时段生成 HTML 邮件效果') +
     section('时段选择', `<div class="card"><div class="card-bd">
       <div class="seg" id="periodSeg">
-        ${periods.map(([k, l]) => `<button class="${cur === k ? 'active' : ''}" data-period="${k}">${l}</button>`).join('')}
+        ${PERIODS.map(([k, l, i]) => `<button class="${cur === k ? 'active' : ''}" data-period="${k}">${ic(i)}${l}</button>`).join('')}
       </div>
-      <div class="mt-4"><button class="btn btn-primary btn-block" data-act="gen-preview">👁️ 生成预览</button></div>
-    </div></div>`, '🕒') +
+      <div class="mt-4"><button class="btn btn-primary btn-block" data-act="gen-preview">${ic('eye')}生成预览</button></div>
+    </div></div>`, 'clock') +
     section('预览结果', `<div class="preview-shell" id="previewShell">
-      ${emptyState('🖼️', '尚未生成预览', '选择时段后点击「生成预览」查看邮件渲染效果。')}
-    </div>`, '📄');
+      ${emptyState('image', '尚未生成预览', '选择时段后点击「生成预览」查看邮件渲染效果。')}
+    </div>`, 'doc');
 }
 
-const PERIOD_LABEL = { morning: '🌅 早报', noon: '☀️ 午报', afternoon: '🌇 午后', evening: '🌙 晚间' };
+const PERIOD_LABEL = { morning: '早报', noon: '午报', afternoon: '午后', evening: '晚间' };
 
 function demoEmailHtml(period) {
   const label = PERIOD_LABEL[period] || '早报';
   const now = new Date();
-  const date = `${now.getFullYear()}年${now.getMonth() + 1}月${now.getDate()}日`;
+  const date = `${now.getFullYear()} 年 ${now.getMonth() + 1} 月 ${now.getDate()} 日`;
   const items = [
-    ['🤖 AI 前沿', '多模态大模型进入「实时交互」阶段', '新一轮模型竞赛聚焦低延迟推理与端侧部署，推理成本持续下探。'],
-    ['💻 硬件动态', '新一代 ARM 平台能效比再创新高', '移动端 NPU 算力提升明显，端侧 AI 应用场景进一步扩大。'],
-    ['🌏 国际要闻', '全球科技产业链加速区域化重构', '多地推进本地化产能建设，供应链韧性成为核心议题。'],
-    ['💰 财经速览', '科技板块震荡上行，资金关注算力基建', '市场风险偏好回升，算力与数据中心相关标的受到关注。'],
+    ['AI 前沿', 'cpu', '多模态大模型进入「实时交互」阶段', '新一轮模型竞赛聚焦低延迟推理与端侧部署，推理成本持续下探。'],
+    ['硬件动态', 'monitor', '新一代 ARM 平台能效比再创新高', '移动端 NPU 算力提升明显，端侧 AI 应用场景进一步扩大。'],
+    ['国际要闻', 'globe', '全球科技产业链加速区域化重构', '多地推进本地化产能建设，供应链韧性成为核心议题。'],
+    ['财经速览', 'coin', '科技板块震荡上行，资金关注算力基建', '市场风险偏好回升，算力与数据中心相关标的受到关注。'],
   ];
+  const svgIcon = (n) => `<svg width="13" height="13" viewBox="0 0 24 24" fill="#6366F1" style="vertical-align:-2px"><use href="#i-${n}"/></svg>`;
   return `<!DOCTYPE html><html><head><meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1"></head>
   <body style="margin:0;background:#f2f4f8;font-family:-apple-system,'PingFang SC','Microsoft YaHei',sans-serif;">
@@ -686,24 +903,23 @@ function demoEmailHtml(period) {
     </div>
     <div style="padding:22px 28px 8px;">
       <div style="background:#FFF7ED;border:1px solid #FED7AA;border-radius:12px;padding:12px 14px;font-size:12.5px;color:#9A3412;line-height:1.6;">
-        这是 <b>示例预览</b>：当前 <code>data/</code> 目录还没有真实抓取数据。执行一次「立即抓取」后，这里会显示真实生成的邮件。
+        这是<b>示例预览</b>：当前 data 目录还没有真实抓取数据。执行一次「立即抓取」后，这里会显示真实生成的邮件。
       </div>
     </div>
     <div style="padding:6px 28px 28px;">
-      ${items.map(([tag, title, desc]) => `
+      ${items.map(([tag, icon, title, desc]) => `
       <div style="border-bottom:1px solid #eceff5;padding:16px 0;">
-        <div style="font-size:11.5px;font-weight:700;color:#6366F1;letter-spacing:.5px;">${tag}</div>
+        <div style="font-size:11.5px;font-weight:700;color:#6366F1;letter-spacing:.5px;">${svgIcon(icon)} ${tag}</div>
         <div style="font-size:16px;font-weight:700;color:#0f172a;margin:6px 0;line-height:1.45;">${title}</div>
         <div style="font-size:13px;color:#5A6780;line-height:1.7;">${desc}</div>
       </div>`).join('')}
       <div style="margin-top:22px;background:#F5F7FC;border-radius:14px;padding:16px 18px;">
-        <div style="font-size:12px;font-weight:700;color:#0f172a;margin-bottom:6px;">💬 今日一句</div>
+        <div style="font-size:12px;font-weight:700;color:#0f172a;margin-bottom:6px;">${svgIcon('quote')} 今日一句</div>
         <div style="font-size:13px;color:#5A6780;line-height:1.7;font-style:italic;">「把复杂留给系统，把清晰留给读者。」</div>
       </div>
     </div>
     <div style="padding:18px 28px 26px;text-align:center;font-size:11px;color:#8A94A8;border-top:1px solid #eceff5;">
-      LumaPost · 光影邮报 &nbsp;|&nbsp; AI 驱动的智能新闻邮件系统<br>
-      本邮件由系统自动生成
+      LumaPost · 光影邮报 &nbsp;|&nbsp; AI 驱动的智能新闻邮件系统<br>本邮件由系统自动生成
     </div>
   </div></body></html>`;
 }
@@ -726,7 +942,7 @@ async function genPreview() {
     demo = true;
   }
   if (!html) html = demoEmailHtml(period);
-  shell.innerHTML = `<iframe class="preview-frame" id="previewFrame"></iframe>`;
+  shell.innerHTML = `<iframe class="preview-frame" id="previewFrame" title="邮件预览"></iframe>`;
   $('#previewFrame').srcdoc = html;
   toast(demo ? '暂无真实数据，已展示示例预览' : '预览已生成', demo ? 'info' : 'ok');
 }
@@ -766,10 +982,11 @@ async function doTestMail() {
     else toast(res.error || '发送失败', 'err');
   } catch (e) { busy(false); toast('发送失败: ' + e.message, 'err'); }
 }
+
 function confirmModal(title, desc, onOk, okText = '确认', danger = false) {
   const mask = document.createElement('div');
   mask.className = 'modal-mask';
-  mask.innerHTML = `<div class="modal">
+  mask.innerHTML = `<div class="modal" role="dialog" aria-modal="true">
     <div class="modal-hd"><div class="modal-title">${esc(title)}</div><div class="modal-desc">${esc(desc)}</div></div>
     <div class="modal-ft">
       <button class="btn btn-secondary" data-no>取消</button>
@@ -806,9 +1023,11 @@ function bind() {
   const view = $('#view');
   if (view.dataset.bound === '1') return;
   view.dataset.bound = '1';
+
   view.addEventListener('click', async (e) => {
     const nav = e.target.closest('[data-nav]');
     if (nav) return go(nav.dataset.nav);
+
     const act = e.target.closest('[data-act]');
     if (act) {
       const a = act.dataset.act;
@@ -822,7 +1041,11 @@ function bind() {
       if (a === 'gen-preview') return genPreview();
       if (a === 'eye') {
         const inp = $('#' + act.dataset.target);
-        if (inp) { inp.type = inp.type === 'password' ? 'text' : 'password'; act.style.color = inp.type === 'text' ? 'var(--brand-1)' : ''; }
+        if (!inp) return;
+        const show = inp.type === 'password';
+        inp.type = show ? 'text' : 'password';
+        act.classList.toggle('on', show);
+        act.innerHTML = ic(show ? 'eye-off' : 'eye');
         return;
       }
       if (a === 'loadmodels') {
@@ -842,6 +1065,7 @@ function bind() {
         return;
       }
     }
+
     const chip = e.target.closest('[data-chip]');
     if (chip) {
       const inp = $('#f-ai-model');
@@ -850,6 +1074,7 @@ function bind() {
       buzz();
       return;
     }
+
     const pick = e.target.closest('[data-pick]');
     if (pick) {
       const key = pick.dataset.pick;
@@ -862,6 +1087,7 @@ function bind() {
       loadModels(key);
       return;
     }
+
     const model = e.target.closest('[data-model]');
     if (model) {
       const id = model.dataset.model;
@@ -872,6 +1098,7 @@ function bind() {
       buzz();
       return;
     }
+
     const per = e.target.closest('[data-period]');
     if (per) {
       State.previewPeriod = per.dataset.period;
@@ -896,10 +1123,10 @@ function bind() {
   });
 }
 
-/* ============ Boot ============ */
+/* ============ Outer shell (sidebar / topbar) ============ */
 document.addEventListener('click', (e) => {
   const nav = e.target.closest('[data-nav]');
-  if (nav) go(nav.dataset.nav);
+  if (nav) { go(nav.dataset.nav); return; }
   const act = e.target.closest('[data-act]');
   if (act && !$('#view').contains(act)) {
     if (act.dataset.act === 'fetch') doFetch();
@@ -907,6 +1134,7 @@ document.addEventListener('click', (e) => {
   }
 });
 
+/* ============ Boot ============ */
 (async function boot() {
   renderNav();
   try {
@@ -916,11 +1144,7 @@ document.addEventListener('click', (e) => {
     State.config = {};
   }
   await render();
-  window.addEventListener('beforeunload', (e) => {
-    if (State.dirty) { e.preventDefault(); e.returnValue = ''; }
-  });
 })();
-
 </script>
 </body>
 </html>
