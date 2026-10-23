@@ -296,45 +296,63 @@ const PROVIDERS = {
   },
 };
 
-let _cachedConfig = null;
+let _configStore = null;
+function getStore() {
+  if (_configStore === null) {
+    try { _configStore = require('./config-store'); } catch (e) { _configStore = false; }
+  }
+  return _configStore || null;
+}
 
 function loadConfig() {
-  if (_cachedConfig) return _cachedConfig;
-  
-  const providerKey = (process.env.AI_PROVIDER || 'deepseek').toLowerCase();
+  const store = getStore();
+  const fileCfg = store ? store.getAll() : {};
+  const aiCfg = fileCfg.ai || {};
+
+  const providerKey = String(
+    process.env.AI_PROVIDER || aiCfg.provider || 'deepseek'
+  ).toLowerCase();
   const provider = PROVIDERS[providerKey];
-  
+
   if (!provider) {
     throw new Error(
-      `❌ 不支持的 AI 提供商: "${providerKey}"
-` +
-      `支持: ${Object.keys(PROVIDERS).join(', ')}`
+      '不支持 AI 提供商: "' + providerKey + '"\n支持: ' + Object.keys(PROVIDERS).join(', ')
     );
   }
-  
+
   const apiKey = process.env.AI_API_KEY
-                 || process.env[provider.envKey]
-                 || process.env[providerKey.toUpperCase() + '_API_KEY'];
-  
-  if (!apiKey) {
+    || aiCfg.apiKey
+    || process.env[provider.envKey]
+    || process.env[providerKey.toUpperCase() + '_API_KEY']
+    || '';
+
+  if (!apiKey && providerKey !== 'custom') {
     throw new Error(
-      `❌ 未配置 API Key。
-` +
-      `请在 .env / GitHub Secrets 设置 AI_API_KEY 或 ${provider.envKey}
-` +
-      `获取: ${provider.docs}`
+      '未配置 API Key。请在 Web UI 配置页或 config/app.json 中设置。\n获取: ' + provider.docs
     );
   }
-  
-  return _cachedConfig = {
+
+  const baseUrlRaw = process.env.AI_BASE_URL
+    || aiCfg.baseUrl
+    || provider.baseUrl
+    || '';
+
+  if (!baseUrlRaw) {
+    throw new Error('提供商 "' + providerKey + '" 缺少 Base URL，请在配置页填写。');
+  }
+
+  // config-store 是单一数据源，每次调用重新读取（其内部有 mtime 缓存，开销极小）
+  return {
     provider: providerKey,
     providerName: provider.name,
-    apiKey,
-    baseUrl: (process.env.AI_BASE_URL || provider.baseUrl).replace(/\/+$/, ''),
-    model: process.env.AI_MODEL || provider.defaultModel,
-    timeout: parseInt(process.env.AI_TIMEOUT) || 60000,
-    maxTokens: parseInt(process.env.AI_MAX_TOKENS) || 4096,
-    temperature: parseFloat(process.env.AI_TEMP) || 0.7,
+    apiKey: apiKey,
+    baseUrl: String(baseUrlRaw).replace(/\/+$/, ''),
+    model: process.env.AI_MODEL || aiCfg.model || provider.defaultModel,
+    timeout: Number(process.env.AI_TIMEOUT) || Number(aiCfg.timeout) || 60000,
+    maxTokens: Number(process.env.AI_MAX_TOKENS) || Number(aiCfg.maxTokens) || 4096,
+    temperature: process.env.AI_TEMP !== undefined
+      ? parseFloat(process.env.AI_TEMP)
+      : (aiCfg.temperature !== undefined ? Number(aiCfg.temperature) : 0.7),
     protocol: provider.protocol,
   };
 }
@@ -476,53 +494,107 @@ async function chatJSON(messages, options = {}) {
   }
 }
 
-async function listModels(providerKey = null) {
-  if (providerKey) {
-    const provider = PROVIDERS[providerKey.toLowerCase()];
-    if (!provider) throw new Error(`未知的提供商: ${providerKey}`);
+/**
+ * 获取模型列表
+ * @param {string|null} providerKey 指定提供商；null 表示当前配置的提供商
+ * @param {object} override 临时覆盖 { apiKey, baseUrl }
+ */
+async function listModels(providerKey, override) {
+  override = override || {};
+
+  // 解析目标提供商
+  let key = providerKey;
+  if (!key) {
+    const store = getStore();
+    key = process.env.AI_PROVIDER
+      || (store && store.get('ai.provider'))
+      || 'deepseek';
+  }
+  key = String(key).toLowerCase();
+
+  const provider = PROVIDERS[key];
+  if (!provider) throw new Error('未知的提供商: ' + key);
+
+  // 解析 Key 与 BaseUrl：显式传入 > 配置文件 > 环境变量 > 提供商默认
+  const store = getStore();
+  const isCurrent = !providerKey
+    || (store && store.get('ai.provider') === key);
+
+  const apiKey = override.apiKey
+    || (isCurrent && store ? store.get('ai.apiKey') : '')
+    || process.env.AI_API_KEY
+    || process.env[provider.envKey]
+    || '';
+
+  const baseUrl = (override.baseUrl
+    || (isCurrent && store ? store.get('ai.baseUrl') : '')
+    || process.env.AI_BASE_URL
+    || provider.baseUrl
+    || '').replace(/\/+$/, '');
+
+  // 无 Key / 无端点时返回静态内置列表
+  if (!apiKey || !baseUrl) {
     return provider.models || [];
   }
-  
-  const currentCfg = loadConfig();
-  const currentProvider = PROVIDERS[currentCfg.provider];
-  
-  // 尝试动态获取
+
   try {
-    switch (currentCfg.protocol) {
-      case 'openai': {
-        const url = `${currentCfg.baseUrl}/models`;
-        const res = await httpRequest(url, { method: 'GET', headers: {
-          'Authorization': `Bearer ${currentCfg.apiKey}`,
-        }}, null);
-        
-        if (res.data && Array.isArray(res.data)) {
-          return res.data.map(m => ({
-            id: m.id,
-            name: m.id,
-            context: m.context_length || m.max_tokens || 0,
-          }));
-        }
-        break;
+    if (provider.protocol === 'openai') {
+      const res = await httpRequest(baseUrl + '/models', {
+        method: 'GET',
+        headers: { 'Authorization': 'Bearer ' + apiKey },
+      }, null);
+      const raw = res.data || res.models || (Array.isArray(res) ? res : null);
+      if (Array.isArray(raw) && raw.length) {
+        return raw.map(function (m) {
+          const id = m.id || m.name || String(m);
+          return {
+            id: id,
+            name: m.name || m.display_name || id,
+            context: m.context_length || m.context_window || m.max_tokens || 0,
+          };
+        }).filter(function (m) { return m.id; })
+          .sort(function (a, b) { return a.id.localeCompare(b.id); });
       }
-      case 'gemini': {
-        const url = `${currentCfg.baseUrl}/models?key=${currentCfg.apiKey}`;
-        const res = await httpRequest(url, { method: 'GET' }, null);
-        
-        if (res.models && Array.isArray(res.models)) {
-          return res.models.map(m => ({
-            id: m.name?.replace('models/', '') || m.name,
-            name: m.displayName || m.name,
-            context: m.inputTokenLimit || 0,
-          }));
-        }
-        break;
+    } else if (provider.protocol === 'gemini') {
+      const res = await httpRequest(baseUrl + '/models?key=' + encodeURIComponent(apiKey), {
+        method: 'GET',
+      }, null);
+      if (res.models && Array.isArray(res.models)) {
+        return res.models
+          .filter(function (m) {
+            return !m.supportedGenerationMethods
+              || m.supportedGenerationMethods.indexOf('generateContent') >= 0;
+          })
+          .map(function (m) {
+            return {
+              id: String(m.name || '').replace('models/', ''),
+              name: m.displayName || m.name,
+              context: m.inputTokenLimit || 0,
+            };
+          });
+      }
+    } else if (provider.protocol === 'anthropic') {
+      const res = await httpRequest(baseUrl + '/models', {
+        method: 'GET',
+        headers: {
+          'x-api-key': apiKey,
+          'anthropic-version': '2023-06-01',
+        },
+      }, null);
+      if (res.data && Array.isArray(res.data)) {
+        return res.data.map(function (m) {
+          return { id: m.id, name: m.display_name || m.id, context: m.context_window || 0 };
+        });
       }
     }
   } catch (e) {
-    console.warn(`动态获取模型列表失败: ${e.message}`);
+    console.warn('[models] ' + key + ' 动态拉取失败，回退静态列表: ' + e.message);
+    const err = new Error(e.message);
+    err.staticFallback = provider.models || [];
+    throw err;
   }
-  
-  return currentProvider?.models || [];
+
+  return provider.models || [];
 }
 
 function listProviders() {
