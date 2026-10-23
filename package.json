@@ -1,6 +1,6 @@
 {
   "name": "lumapost",
-  "version": "4.2.1",
+  "version": "4.2.2",
   "description": "LumaPost - 光影邮报：AI 驱动的智能新闻邮件推送系统。支持 28+ AI 模型、18+ 邮件服务，Web UI 本地部署。",
   "main": "scripts/fetch-news-ai.js",
   "scripts": {
