@@ -1,0 +1,21 @@
+# Dependencies
+node_modules/
+npm-debug.log*
+yarn-error.log*
+
+# Local config & secrets (contains API keys!)
+config/
+.env
+.env.local
+*.local
+
+# Runtime output
+data/
+server.log
+*.log
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
