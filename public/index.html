@@ -2,948 +2,925 @@
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<meta name="theme-color" content="#0F172A">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0B1020">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <title>LumaPost · 光影邮报</title>
 <style>
-/* Design Tokens */
-:root {
-  --primary: #4F46E5;
-  --primary-light: #6366F1;
-  --primary-dark: #3730A3;
-  --primary-ghost: rgba(79,70,229,0.12);
-  --success: #10B981;
-  --success-ghost: rgba(16,185,129,0.12);
-  --warning: #F59E0B;
-  --warning-ghost: rgba(245,158,11,0.12);
-  --danger: #EF4444;
-  --danger-ghost: rgba(239,68,68,0.12);
-  --bg: #0F172A;
-  --bg-elevated: #1E293B;
-  --bg-input: #0B1120;
-  --border: #334155;
-  --border-light: #1E293B;
-  --text: #F1F5F9;
-  --text-secondary: #CBD5E1;
-  --text-muted: #94A3B8;
-  --text-disabled: #64748B;
-  --radius-sm: 6px;
-  --radius-md: 10px;
-  --radius-lg: 16px;
-  --radius-full: 9999px;
-  --space-xs: 4px;
-  --space-sm: 8px;
-  --space-md: 16px;
-  --space-lg: 24px;
-  --space-xl: 32px;
-  --shadow-sm: 0 1px 2px rgba(0,0,0,0.3);
-  --shadow-md: 0 4px 12px rgba(0,0,0,0.4);
-  --shadow-lg: 0 10px 30px rgba(0,0,0,0.5);
-  --transition: 0.2s ease;
-  --sidebar-width: 220px;
-  --tabbar-height: 60px;
+/* ============================================================
+   LumaPost Design System v5 — Tokens / Reset / Layout
+   ============================================================ */
+:root{
+  --brand-1:#6366F1; --brand-2:#8B5CF6; --brand-3:#22D3EE;
+  --grad-brand:linear-gradient(135deg,#6366F1 0%,#8B5CF6 55%,#A855F7 100%);
+  --grad-glow:linear-gradient(135deg,rgba(99,102,241,.22),rgba(168,85,247,.10));
+  --brand-soft:rgba(99,102,241,.14);
+  --brand-line:rgba(99,102,241,.32);
+  --ok:#10B981;   --ok-soft:rgba(16,185,129,.14);
+  --warn:#F59E0B; --warn-soft:rgba(245,158,11,.14);
+  --err:#F43F5E;  --err-soft:rgba(244,63,94,.14);
+  --info:#38BDF8; --info-soft:rgba(56,189,248,.14);
+  --bg:#080B16;
+  --surface:#111726; --surface-2:#182031; --surface-3:#1F2A3D; --input:#0C1220;
+  --line:rgba(255,255,255,.075); --line-strong:rgba(255,255,255,.14);
+  --text:#EEF2F9; --text-2:#A7B3C9; --text-3:#6B7893;
+  --r-xs:8px; --r-sm:12px; --r-md:16px; --r-lg:20px; --r-xl:26px; --r-full:999px;
+  --s-1:4px; --s-2:8px; --s-3:12px; --s-4:16px; --s-5:20px; --s-6:24px; --s-8:32px; --s-10:40px;
+  --sh-1:0 1px 2px rgba(0,0,0,.35);
+  --sh-2:0 4px 16px rgba(0,0,0,.34);
+  --sh-3:0 12px 36px rgba(0,0,0,.42);
+  --sh-brand:0 8px 26px rgba(99,102,241,.34);
+  --ease:cubic-bezier(.32,.72,0,1);
+  --fast:150ms; --mid:240ms; --slow:380ms;
+  --sidebar-w:248px; --topbar-h:60px; --tabbar-h:64px; --maxw:1080px;
 }
-
-@media (prefers-color-scheme: light) {
-  :root {
-    --bg: #F8FAFC;
-    --bg-elevated: #FFFFFF;
-    --bg-input: #F1F5F9;
-    --border: #E2E8F0;
-    --border-light: #F1F5F9;
-    --text: #0F172A;
-    --text-secondary: #475569;
-    --text-muted: #94A3B8;
-    --shadow-sm: 0 1px 2px rgba(0,0,0,0.05);
-    --shadow-md: 0 4px 12px rgba(0,0,0,0.08);
+@media (prefers-color-scheme:light){
+  :root{
+    --bg:#F5F7FC; --surface:#FFFFFF; --surface-2:#F4F6FB; --surface-3:#EEF1F8; --input:#F2F5FA;
+    --line:rgba(15,23,42,.08); --line-strong:rgba(15,23,42,.16);
+    --text:#0D1424; --text-2:#5A6780; --text-3:#8A94A8;
+    --brand-soft:rgba(79,70,229,.10); --brand-line:rgba(79,70,229,.26);
+    --sh-1:0 1px 2px rgba(15,23,42,.06);
+    --sh-2:0 6px 20px rgba(15,23,42,.08);
+    --sh-3:0 16px 40px rgba(15,23,42,.12);
   }
 }
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+html{-webkit-text-size-adjust:100%}
+body{
+  font-family:-apple-system,BlinkMacSystemFont,"SF Pro SC","PingFang SC","HarmonyOS Sans SC","Noto Sans SC","Microsoft YaHei",system-ui,sans-serif;
+  background:var(--bg);color:var(--text);font-size:15px;line-height:1.6;
+  -webkit-font-smoothing:antialiased;min-height:100dvh;overflow-x:hidden;
+}
+body::before{
+  content:'';position:fixed;inset:-20% -10% auto -10%;height:66vh;z-index:-1;pointer-events:none;
+  background:
+    radial-gradient(46% 52% at 18% 8%,rgba(99,102,241,.17),transparent 70%),
+    radial-gradient(42% 46% at 86% 0%,rgba(34,211,238,.10),transparent 68%);
+  filter:blur(6px);
+}
+button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
+input,select,textarea{font:inherit;color:inherit}
+::-webkit-scrollbar{width:8px;height:8px}
+::-webkit-scrollbar-thumb{background:var(--line-strong);border-radius:9px}
+::selection{background:var(--brand-soft)}
 
-*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-html { -webkit-tap-highlight-color: transparent; }
-body {
-  font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
-  background: var(--bg);
-  color: var(--text);
-  line-height: 1.6;
-  overflow-x: hidden;
-  min-height: 100vh;
-  min-height: 100dvh;
+/* ---------- Layout ---------- */
+.app{display:flex;min-height:100dvh}
+.sidebar{
+  position:fixed;left:0;top:0;bottom:0;width:var(--sidebar-w);z-index:40;
+  display:flex;flex-direction:column;padding:var(--s-5) var(--s-3);
+  background:color-mix(in srgb,var(--surface) 80%,transparent);
+  border-right:1px solid var(--line);
+  backdrop-filter:blur(18px) saturate(150%);
+  -webkit-backdrop-filter:blur(18px) saturate(150%);
 }
-button { font-family: inherit; cursor: pointer; border: none; background: none; color: inherit; }
-input, select, textarea { font-family: inherit; font-size: 14px; }
+.brand{display:flex;align-items:center;gap:var(--s-3);padding:0 var(--s-2) var(--s-5)}
+.brand-logo{
+  width:40px;height:40px;flex:0 0 40px;border-radius:13px;background:var(--grad-brand);
+  display:grid;place-items:center;font-size:19px;box-shadow:var(--sh-brand);
+}
+.brand-name{font-size:15.5px;font-weight:760;letter-spacing:.2px;line-height:1.25}
+.brand-sub{font-size:10.5px;color:var(--text-3);letter-spacing:.7px;text-transform:uppercase}
+.nav{display:flex;flex-direction:column;gap:2px;flex:1;overflow-y:auto;padding-bottom:var(--s-3)}
+.nav-label{font-size:10.5px;font-weight:700;letter-spacing:1.1px;text-transform:uppercase;color:var(--text-3);padding:var(--s-3) var(--s-3) var(--s-2)}
+.nav-item{
+  display:flex;align-items:center;gap:var(--s-3);padding:10px var(--s-3);
+  border-radius:var(--r-sm);color:var(--text-2);font-size:14px;font-weight:560;
+  text-align:left;width:100%;position:relative;
+  transition:background var(--fast) var(--ease),color var(--fast) var(--ease),transform var(--fast) var(--ease);
+}
+.nav-item .ico{font-size:16px;width:20px;text-align:center;flex:0 0 20px}
+.nav-item:hover{background:var(--surface-2);color:var(--text)}
+.nav-item:active{transform:scale(.985)}
+.nav-item.active{background:var(--brand-soft);color:var(--text);font-weight:660}
+.nav-item.active::before{
+  content:'';position:absolute;left:-12px;top:50%;transform:translateY(-50%);
+  width:3px;height:18px;border-radius:0 3px 3px 0;background:var(--grad-brand);
+}
+.sidebar-foot{padding:var(--s-3) var(--s-2) 0;border-top:1px solid var(--line)}
+.sidebar-foot .btn{width:100%}
 
-.app { display: flex; min-height: 100vh; min-height: 100dvh; }
+.topbar{
+  display:none;position:sticky;top:0;z-index:35;height:var(--topbar-h);
+  align-items:center;justify-content:space-between;gap:var(--s-3);padding:0 var(--s-4);
+  background:color-mix(in srgb,var(--bg) 84%,transparent);
+  backdrop-filter:blur(20px) saturate(160%);
+  -webkit-backdrop-filter:blur(20px) saturate(160%);
+  border-bottom:1px solid var(--line);
+}
+.topbar .brand{padding:0;gap:var(--s-2)}
+.topbar .brand-logo{width:32px;height:32px;flex-basis:32px;border-radius:10px;font-size:16px}
+.topbar .brand-name{font-size:14.5px}
+.topbar-actions{display:flex;gap:var(--s-2)}
+.icon-btn{
+  width:36px;height:36px;border-radius:11px;display:grid;place-items:center;font-size:16px;
+  background:var(--surface-2);border:1px solid var(--line);
+  transition:transform var(--fast) var(--ease),background var(--fast) var(--ease);
+}
+.icon-btn:active{transform:scale(.92);background:var(--surface-3)}
 
-.sidebar {
-  width: var(--sidebar-width);
-  background: var(--bg-elevated);
-  border-right: 1px solid var(--border-light);
-  display: flex;
-  flex-direction: column;
-  position: fixed;
-  top: 0; left: 0; bottom: 0;
-  z-index: 50;
-  padding: var(--space-lg) 0;
-}
-.sidebar-logo {
-  padding: 0 var(--space-lg) var(--space-lg);
-  display: flex;
-  align-items: center;
-  gap: var(--space-sm);
-  font-size: 18px;
-  font-weight: 700;
-}
-.sidebar-logo .icon { font-size: 26px; }
-.sidebar-nav {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  padding: 0 var(--space-md);
-}
-.nav-item {
-  display: flex;
-  align-items: center;
-  gap: var(--space-sm);
-  padding: var(--space-sm) var(--space-md);
-  border-radius: var(--radius-md);
-  color: var(--text-muted);
-  font-size: 14px;
-  font-weight: 500;
-  transition: all var(--transition);
-}
-.nav-item:hover { background: var(--bg-input); color: var(--text); }
-.nav-item.active { background: var(--primary-ghost); color: var(--primary-light); }
-.nav-item .icon { font-size: 18px; width: 24px; text-align: center; }
-.sidebar-footer { padding: var(--space-md); border-top: 1px solid var(--border-light); }
+.main{flex:1;margin-left:var(--sidebar-w);padding:var(--s-6) var(--s-6) var(--s-10);width:100%;min-width:0}
+.wrap{max-width:var(--maxw);margin:0 auto;width:100%}
 
-.tabbar {
-  display: none;
-  position: fixed;
-  bottom: 0; left: 0; right: 0;
-  height: var(--tabbar-height);
-  background: var(--bg-elevated);
-  border-top: 1px solid var(--border-light);
-  z-index: 50;
+.tabbar{
+  display:none;position:fixed;left:0;right:0;bottom:0;z-index:38;
+  padding-bottom:env(safe-area-inset-bottom);
+  background:color-mix(in srgb,var(--bg) 88%,transparent);
+  backdrop-filter:blur(22px) saturate(170%);
+  -webkit-backdrop-filter:blur(22px) saturate(170%);
+  border-top:1px solid var(--line);
 }
-.tabbar-inner { display: flex; height: 100%; }
-.tabbar-item {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 2px;
-  color: var(--text-muted);
-  font-size: 10px;
-  font-weight: 500;
-  padding: var(--space-xs);
+.tabbar-inner{display:flex;height:var(--tabbar-h)}
+.tab-item{
+  flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;
+  color:var(--text-3);font-size:10.5px;font-weight:620;position:relative;
+  transition:color var(--fast) var(--ease);
 }
-.tabbar-item.active { color: var(--primary-light); }
-.tabbar-item .icon { font-size: 20px; }
+.tab-item .ico{font-size:18px;transition:transform var(--mid) var(--ease)}
+.tab-item:active .ico{transform:scale(.86)}
+.tab-item.active{color:var(--brand-1)}
+.tab-item.active::after{content:'';position:absolute;top:0;width:26px;height:3px;border-radius:0 0 4px 4px;background:var(--grad-brand)}
+@media (prefers-color-scheme:light){.tab-item.active{color:#4F46E5}}
 
-.main {
-  flex: 1;
-  margin-left: var(--sidebar-width);
-  padding: var(--space-lg);
-  max-width: 960px;
-  width: 100%;
-}
+/* ---------- Components (part 2) ---------- */
+.loading-bar::after{content:'';position:absolute;inset:0;width:38%;background:var(--grad-brand);border-radius:9px;animation:barSlide 1.05s var(--ease) infinite}
+@keyframes barSlide{0%{transform:translateX(-105%)}100%{transform:translateX(300%)}}
 
-.card {
-  background: var(--bg-elevated);
-  border: 1px solid var(--border-light);
-  border-radius: var(--radius-lg);
-  padding: var(--space-lg);
-  box-shadow: var(--shadow-sm);
-}
+.modal-mask{position:fixed;inset:0;z-index:80;background:rgba(4,6,14,.62);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);display:grid;place-items:center;padding:var(--s-5);animation:fadeIn var(--mid) var(--ease)}
+@keyframes fadeIn{from{opacity:0}to{opacity:1}}
+.modal{width:100%;max-width:420px;background:var(--surface);border:1px solid var(--line-strong);border-radius:var(--r-lg);box-shadow:var(--sh-3);overflow:hidden;animation:modalIn var(--slow) var(--ease)}
+@keyframes modalIn{from{opacity:0;transform:translateY(16px) scale(.97)}to{opacity:1;transform:none}}
+.modal-hd{padding:var(--s-5) var(--s-5) var(--s-2)}
+.modal-title{font-size:16px;font-weight:760}
+.modal-desc{font-size:12.5px;color:var(--text-3);margin-top:3px;line-height:1.5}
+.modal-bd{padding:var(--s-4) var(--s-5)}
+.modal-ft{display:flex;gap:var(--s-2);padding:var(--s-4) var(--s-5) var(--s-5)}
+.modal-ft .btn{flex:1}
 
-.stats-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: var(--space-md);
-}
-.stat-card {
-  background: var(--bg-elevated);
-  border: 1px solid var(--border-light);
-  border-radius: var(--radius-lg);
-  padding: var(--space-lg);
-  display: flex;
-  align-items: center;
-  gap: var(--space-md);
-  box-shadow: var(--shadow-sm);
-}
-.stat-icon {
-  width: 48px; height: 48px;
-  border-radius: var(--radius-md);
-  display: flex; align-items: center; justify-content: center;
-  font-size: 22px;
-  flex-shrink: 0;
-}
-.stat-icon.primary { background: var(--primary-ghost); }
-.stat-icon.success { background: var(--success-ghost); }
-.stat-icon.warning { background: var(--warning-ghost); }
-.stat-info { min-width: 0; }
-.stat-value {
-  font-size: 17px; font-weight: 600;
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-}
-.stat-label { font-size: 12px; color: var(--text-muted); }
+.preview-frame{width:100%;height:min(72vh,760px);border:0;background:#fff;border-radius:var(--r-md);display:block}
+.preview-shell{background:var(--surface);border:1px solid var(--line);border-radius:var(--r-md);padding:var(--s-2);box-shadow:var(--sh-1)}
 
-.btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: var(--space-sm);
-  padding: 10px 18px;
-  border-radius: var(--radius-md);
-  font-size: 14px;
-  font-weight: 500;
-  transition: all var(--transition);
-  white-space: nowrap;
-}
-.btn:active { transform: scale(0.96); }
-.btn-primary { background: var(--primary); color: #fff; }
-.btn-primary:hover { background: var(--primary-light); }
-.btn-secondary { background: var(--bg-input); color: var(--text); border: 1px solid var(--border); }
-.btn-secondary:hover { border-color: var(--primary); }
-.btn-ghost { background: transparent; color: var(--text-muted); }
-.btn-ghost:hover { background: var(--bg-input); color: var(--text); }
-.btn-danger { background: var(--danger-ghost); color: var(--danger); }
-.btn-lg { padding: 14px 28px; font-size: 16px; }
-.btn-sm { padding: 6px 12px; font-size: 12px; }
-.btn-block { width: 100%; }
+.seg{display:inline-flex;background:var(--surface-2);border:1px solid var(--line);border-radius:var(--r-sm);padding:3px;gap:2px}
+.seg button{height:32px;padding:0 14px;border-radius:9px;font-size:12.5px;font-weight:640;color:var(--text-2);transition:all var(--fast) var(--ease)}
+.seg button.active{background:var(--surface);color:var(--text);box-shadow:var(--sh-1)}
+@media (prefers-color-scheme:light){.seg button.active{box-shadow:0 1px 3px rgba(15,23,42,.12)}}
 
-.form-group { margin-bottom: var(--space-md); }
-.form-label {
-  display: block;
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--text-secondary);
-  margin-bottom: var(--space-xs);
+.hero{
+  position:relative;overflow:hidden;border-radius:var(--r-lg);
+  padding:var(--s-6);margin-bottom:var(--s-5);
+  background:var(--surface);border:1px solid var(--line);
+  box-shadow:var(--sh-2);
 }
-.form-input {
-  width: 100%;
-  padding: 10px 14px;
-  background: var(--bg-input);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-md);
-  color: var(--text);
-  transition: border-color var(--transition);
+.hero::before{
+  content:'';position:absolute;inset:0;pointer-events:none;
+  background:radial-gradient(80% 130% at 100% 0%,rgba(139,92,246,.20),transparent 62%),
+             radial-gradient(70% 120% at 0% 100%,rgba(34,211,238,.13),transparent 60%);
 }
-.form-input:focus {
-  outline: none;
-  border-color: var(--primary);
-  box-shadow: 0 0 0 3px var(--primary-ghost);
-}
-.form-input::placeholder { color: var(--text-disabled); }
+.hero-in{position:relative;display:flex;align-items:center;justify-content:space-between;gap:var(--s-5);flex-wrap:wrap}
+.hero-title{font-size:22px;font-weight:820;letter-spacing:-.5px;line-height:1.3}
+.hero-title .grad{background:var(--grad-brand);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
+.hero-sub{font-size:13px;color:var(--text-2);margin-top:6px;max-width:430px;line-height:1.6}
+.hero-actions{display:flex;gap:var(--s-2);flex-wrap:wrap}
+.hero-pulse{display:inline-flex;align-items:center;gap:6px;font-size:11.5px;font-weight:650;color:var(--ok);background:var(--ok-soft);padding:4px 10px;border-radius:var(--r-full);margin-bottom:var(--s-3)}
+.hero-pulse i{width:6px;height:6px;border-radius:50%;background:var(--ok);animation:pulse 1.8s ease-in-out infinite;display:block}
+@keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.35;transform:scale(.8)}}
 
-.badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 3px 10px;
-  border-radius: var(--radius-full);
-  font-size: 11px;
-  font-weight: 500;
+.sticky-actions{
+  position:sticky;bottom:0;z-index:20;
+  display:flex;gap:var(--s-2);padding:var(--s-3) 0;
+  background:color-mix(in srgb,var(--bg) 88%,transparent);
+  backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);
+  border-top:1px solid var(--line);
 }
-.badge-success { background: var(--success-ghost); color: var(--success); }
-.badge-warning { background: var(--warning-ghost); color: var(--warning); }
-.badge-danger  { background: var(--danger-ghost); color: var(--danger); }
+.sticky-actions .btn{flex:1}
 
-.provider-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
-  gap: var(--space-md);
-}
-.provider-card {
-  background: var(--bg-elevated);
-  border: 1px solid var(--border-light);
-  border-radius: var(--radius-lg);
-  padding: var(--space-md);
-  cursor: pointer;
-  transition: all var(--transition);
-  text-align: center;
-}
-.provider-card:hover {
-  border-color: var(--primary);
-  transform: translateY(-2px);
-  box-shadow: var(--shadow-md);
-}
-.provider-card.active { border-color: var(--primary); background: var(--primary-ghost); }
-.provider-name { font-weight: 600; margin-top: var(--space-sm); font-size: 13px; }
-.provider-model { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+.divider{height:1px;background:var(--line);margin:var(--s-4) 0}
+.mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px}
+.muted{color:var(--text-3)}
+.mt-3{margin-top:var(--s-3)}
+.mt-4{margin-top:var(--s-4)}
+.hidden{display:none !important}
 
-.status-bar {
-  display: flex;
-  align-items: center;
-  gap: var(--space-sm);
-  padding: var(--space-md);
-  background: var(--bg-elevated);
-  border: 1px solid var(--border-light);
-  border-radius: var(--radius-lg);
-  margin-bottom: var(--space-lg);
+/* ---------- Responsive ---------- */
+@media (max-width:900px){
+  .main{margin-left:0;padding:0 var(--s-4) calc(var(--tabbar-h) + var(--s-6))}
+  .sidebar{display:none}
+  .topbar{display:flex}
+  .tabbar{display:block}
+  .page-title{font-size:21px}
+  .hero{padding:var(--s-5);border-radius:var(--r-md)}
+  .hero-title{font-size:19px}
+  .stats{grid-template-columns:repeat(2,1fr);gap:var(--s-2)}
+  .stat{padding:var(--s-3)}
+  .stat-val{font-size:16.5px}
+  .provider-grid{grid-template-columns:repeat(2,1fr);gap:var(--s-2)}
+  .provider{padding:var(--s-3)}
+  .form-row{grid-template-columns:1fr;gap:0}
+  .toasts{left:var(--s-4);right:var(--s-4);bottom:calc(var(--tabbar-h) + var(--s-3) + env(safe-area-inset-bottom));max-width:none}
+  .preview-frame{height:min(66vh,600px)}
+  .hero-in{gap:var(--s-4)}
+  .hero-actions{width:100%}
+  .hero-actions .btn{flex:1}
 }
-.status-dot { width: 8px; height: 8px; border-radius: 50%; }
-.status-dot.ok { background: var(--success); }
-.status-dot.error { background: var(--danger); }
-.status-text { font-size: 13px; color: var(--text-secondary); }
-
-.toast-container {
-  position: fixed;
-  top: var(--space-lg); right: var(--space-lg);
-  z-index: 1000;
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-sm);
-  pointer-events: none;
-}
-.toast {
-  padding: 12px 20px;
-  border-radius: var(--radius-md);
-  color: #fff;
-  font-size: 14px;
-  font-weight: 500;
-  box-shadow: var(--shadow-lg);
-  animation: toastIn 0.3s ease;
-  pointer-events: auto;
-}
-.toast.success { background: var(--success); }
-.toast.error { background: var(--danger); }
-.toast.info { background: var(--primary); }
-@keyframes toastIn {
-  from { transform: translateX(100%); opacity: 0; }
-  to { transform: translateX(0); opacity: 1; }
+@media (max-width:420px){
+  .page-head{gap:var(--s-3)}
+  .page-head-actions{width:100%}
+  .page-head-actions .btn{flex:1}
+  .btn{padding:0 var(--s-3)}
 }
 
-.page { display: none; animation: pageIn 0.25s ease; }
-.page.active { display: block; }
-@keyframes pageIn {
-  from { opacity: 0; transform: translateY(8px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-
-.page-header { margin-bottom: var(--space-lg); }
-.page-title { font-size: 24px; font-weight: 700; }
-.page-desc { font-size: 14px; color: var(--text-muted); margin-top: var(--space-xs); }
-.section { margin-bottom: var(--space-lg); }
-.section-title {
-  font-size: 16px; font-weight: 600;
-  margin-bottom: var(--space-md);
-  display: flex; align-items: center; gap: var(--space-sm);
-}
-
-.list { display: flex; flex-direction: column; gap: var(--space-sm); }
-.list-item {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: var(--space-md);
-  background: var(--bg-elevated);
-  border: 1px solid var(--border-light);
-  border-radius: var(--radius-md);
-}
-.list-item-title { font-weight: 500; font-size: 14px; }
-.list-item-meta { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
-
-.preview-frame {
-  width: 100%;
-  height: 60vh;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
-  background: #fff;
-}
-
-.loading {
-  position: fixed;
-  top: 0; left: 0;
-  width: 100%; height: 100%;
-  background: rgba(0,0,0,0.6);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 2000;
-  color: #fff;
-  gap: var(--space-md);
-}
-.loading.hidden { display: none; }
-.spinner {
-  width: 32px; height: 32px;
-  border: 3px solid rgba(255,255,255,0.3);
-  border-top-color: #fff;
-  border-radius: 50%;
-  animation: spin 1s linear infinite;
-}
-@keyframes spin { to { transform: rotate(360deg); } }
-
-@media (max-width: 768px) {
-  .sidebar { display: none; }
-  .tabbar { display: block; }
-  .main {
-    margin-left: 0;
-    padding: var(--space-md);
-    padding-bottom: calc(var(--tabbar-height) + var(--space-md));
-  }
-  .stats-grid { grid-template-columns: repeat(2, 1fr); }
-  .provider-grid { grid-template-columns: repeat(2, 1fr); }
-  .page-title { font-size: 20px; }
-  .toast-container { left: var(--space-md); right: var(--space-md); top: var(--space-md); }
-}
-
-.hidden { display: none !important; }
-.mt-1 { margin-top: var(--space-sm); }
-.mt-2 { margin-top: var(--space-md); }
-.flex { display: flex; }
-.gap-1 { gap: var(--space-sm); }
-.gap-2 { gap: var(--space-md); }
-.items-center { align-items: center; }
-.justify-between { justify-content: space-between; }
 </style>
 </head>
 <body>
+<div class="loading-bar" id="loadingBar"></div>
 <div class="app">
-  <aside class="sidebar" id="sidebar">
-    <div class="sidebar-logo">
-      <span class="icon">📰</span>
-      <span>LumaPost</span>
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="brand-logo">📰</div>
+      <div>
+        <div class="brand-name">LumaPost</div>
+        <div class="brand-sub">光影邮报</div>
+      </div>
     </div>
-    <nav class="sidebar-nav" id="sidebarNav"></nav>
-    <div class="sidebar-footer">
-      <button class="btn btn-primary btn-block" onclick="runFetch()">🚀 立即抓取</button>
+    <nav class="nav" id="sideNav"></nav>
+    <div class="sidebar-foot">
+      <button class="btn btn-primary" data-act="fetch">🚀 立即抓取</button>
     </div>
   </aside>
 
-  <nav class="tabbar" id="tabbar">
-    <div class="tabbar-inner"></div>
-  </nav>
-
-  <main class="main" id="mainContent"></main>
+  <div class="main">
+    <header class="topbar">
+      <div class="brand">
+        <div class="brand-logo">📰</div>
+        <div><div class="brand-name">LumaPost</div></div>
+      </div>
+      <div class="topbar-actions">
+        <button class="icon-btn" data-act="fetch" title="立即抓取">🚀</button>
+        <button class="icon-btn" data-act="reload" title="刷新">↻</button>
+      </div>
+    </header>
+    <div class="wrap" id="view"></div>
+  </div>
 </div>
 
-<div class="toast-container" id="toastContainer"></div>
-
-<div class="loading hidden" id="loadingOverlay">
-  <div class="spinner"></div>
-  <span>处理中…</span>
-</div>
+<nav class="tabbar"><div class="tabbar-inner" id="tabBar"></div></nav>
+<div class="toasts" id="toasts"></div>
 
 <script>
+/* ===========================================================
+   LumaPost Web UI v5 — App Logic
+   =========================================================== */
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+const esc = (v) => String(v ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '"', "'": '&#39;' }[c]));
+
 const State = {
+  page: 'dashboard',
   config: {},
-  currentPage: 'dashboard',
   providers: [],
   models: [],
+  modelsFor: null,
   history: { fetchHistory: [], sendHistory: [] },
+  dirty: false,
+  loading: 0,
 };
 
 const API = {
-  async get(path) {
-    const res = await fetch(path);
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    return res.json();
-  },
-  async post(path, data) {
+  async req(path, opt = {}) {
     const res = await fetch(path, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(data),
+      headers: opt.body ? { 'Content-Type': 'application/json' } : undefined,
+      ...opt,
     });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    return res.json();
+    const text = await res.text();
+    let data;
+    try { data = text ? JSON.parse(text) : {}; } catch { data = { raw: text }; }
+    if (!res.ok) throw new Error(data.error || data.message || `HTTP ${res.status}`);
+    return data;
   },
-  async delete(path) {
-    const res = await fetch(path, { method: 'DELETE' });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    return res.json();
-  },
+  get: (p) => API.req(p),
+  post: (p, b) => API.req(p, { method: 'POST', body: JSON.stringify(b ?? {}) }),
+  del: (p) => API.req(p, { method: 'DELETE' }),
 };
 
+/* ---------- Feedback ---------- */
+const ICONS = { ok: '✓', err: '✕', info: 'i', warn: '!' };
 function toast(msg, type = 'info') {
   const el = document.createElement('div');
   el.className = `toast ${type}`;
-  el.textContent = msg;
-  document.getElementById('toastContainer').appendChild(el);
-  setTimeout(() => { el.style.opacity = '0'; setTimeout(() => el.remove(), 300); }, 3000);
+  el.innerHTML = `<span class="ico">${ICONS[type] || ICONS.info}</span><span>${esc(msg)}</span>`;
+  $('#toasts').appendChild(el);
+  const t = setTimeout(dismiss, 3200);
+  function dismiss() { clearTimeout(t); el.classList.add('out'); setTimeout(() => el.remove(), 260); }
+  el.addEventListener('click', dismiss);
+}
+function busy(on) {
+  State.loading = Math.max(0, State.loading + (on ? 1 : -1));
+  $('#loadingBar').classList.toggle('on', State.loading > 0);
+}
+const buzz = () => { try { navigator.vibrate?.(8); } catch {} };
+
+function skeleton(rows = 3) {
+  return `<div class="card card-bd">${Array.from({ length: rows }, (_, i) =>
+    `<div class="sk sk-line ${i % 2 ? 'w60' : ''}"></div>`).join('')}</div>`;
+}
+function emptyState(ico, title, desc, actionHtml = '') {
+  return `<div class="empty">
+    <div class="empty-ico">${ico}</div>
+    <div class="empty-title">${esc(title)}</div>
+    <div class="empty-desc">${esc(desc)}</div>
+    ${actionHtml ? `<div class="mt-3">${actionHtml}</div>` : ''}
+  </div>`;
 }
 
-function showLoading() { document.getElementById('loadingOverlay').classList.remove('hidden'); }
-function hideLoading() { document.getElementById('loadingOverlay').classList.add('hidden'); }
-
+/* ---------- Navigation ---------- */
 const NAV = [
   { key: 'dashboard', label: '仪表盘', icon: '📊' },
-  { key: 'config',    label: '配置',   icon: '⚙️' },
-  { key: 'providers', label: 'AI 提供商', icon: '🤖' },
-  { key: 'history',   label: '历史',   icon: '📜' },
-  { key: 'preview',   label: '预览',   icon: '👁️' },
+  { key: 'config', label: '配置', icon: '⚙️' },
+  { key: 'providers', label: '提供商', icon: '🤖' },
+  { key: 'history', label: '历史', icon: '🕘' },
+  { key: 'preview', label: '预览', icon: '👁️' },
 ];
 
 function renderNav() {
-  const nav = document.getElementById('sidebarNav');
-  nav.innerHTML = NAV.map(n => `
-    <button class="nav-item ${State.currentPage === n.key ? 'active' : ''}" data-page="${n.key}">
-      <span class="icon">${n.icon}</span><span>${n.label}</span>
-    </button>
-  `).join('');
-
-  nav.querySelectorAll('.nav-item').forEach(item => {
-    item.addEventListener('click', () => navigate(item.dataset.page));
-  });
-
-  const tabbar = document.getElementById('tabbar').querySelector('.tabbar-inner');
-  tabbar.innerHTML = NAV.map(n => `
-    <button class="tabbar-item ${State.currentPage === n.key ? 'active' : ''}" data-page="${n.key}">
-      <span class="icon">${n.icon}</span><span>${n.label}</span>
-    </button>
-  `).join('');
-
-  tabbar.querySelectorAll('.tabbar-item').forEach(item => {
-    item.addEventListener('click', () => navigate(item.dataset.page));
-  });
+  $('#sideNav').innerHTML = `<div class="nav-label">主页</div>` +
+    NAV.map(n => `<button class="nav-item ${State.page === n.key ? 'active' : ''}" data-nav="${n.key}">
+      <span class="ico">${n.icon}</span><span>${n.label}</span></button>`).join('');
+  $('#tabBar').innerHTML = NAV.map(n => `<button class="tab-item ${State.page === n.key ? 'active' : ''}" data-nav="${n.key}">
+      <span class="ico">${n.icon}</span><span>${n.label}</span></button>`).join('');
 }
 
-function navigate(page) {
-  State.currentPage = page;
+function go(page) {
+  if (State.page === page) return;
+  State.page = page;
   renderNav();
-  renderPage();
+  render();
+  window.scrollTo({ top: 0, behavior: 'instant' in window ? 'instant' : 'auto' });
 }
 
-async function renderPage() {
-  const main = document.getElementById('mainContent');
-  main.innerHTML = '';
-
-  const page = document.createElement('div');
-  page.className = 'page active';
-  page.id = `page-${State.currentPage}`;
-
-  switch (State.currentPage) {
-    case 'dashboard': await renderDashboard(page); break;
-    case 'config':    await renderConfig(page); break;
-    case 'providers': await renderProviders(page); break;
-    case 'history':   await renderHistory(page); break;
-    case 'preview':   await renderPreview(page); break;
+/* ---------- Router ---------- */
+async function render() {
+  const view = $('#view');
+  view.innerHTML = skeleton(4);
+  const fn = { dashboard: pageDashboard, config: pageConfig, providers: pageProviders, history: pageHistory, preview: pagePreview }[State.page];
+  try {
+    view.innerHTML = await fn();
+    bind();
+  } catch (e) {
+    view.innerHTML = `<div class="card card-bd">${emptyState('⚠️', '加载失败', e.message,
+      `<button class="btn btn-secondary btn-sm" data-act="reload">重试</button>`)}</div>`;
+    bind();
+    toast('加载失败: ' + e.message, 'err');
   }
-
-  main.appendChild(page);
 }
 
-async function renderDashboard(page) {
-  const config = State.config;
-  const val = await API.get('/api/config/validate').catch(() => ({ valid: false, errors: [] }));
-  const news = await API.get('/api/news/latest').catch(() => ({ headline: [] }));
-
-  page.innerHTML = `
-    <div class="page-header">
-      <div class="page-title">仪表盘</div>
-      <div class="page-desc">LumaPost 光影邮报系统概览</div>
-    </div>
-    <div class="section">
-      <div class="stats-grid">
-        <div class="stat-card">
-          <div class="stat-icon primary">🤖</div>
-          <div class="stat-info">
-            <div class="stat-value">${config.ai?.provider || '未设置'}</div>
-            <div class="stat-label">AI 提供商</div>
-          </div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-icon success">📮</div>
-          <div class="stat-info">
-            <div class="stat-value">${config.mail?.provider || '未设置'}</div>
-            <div class="stat-label">邮件服务</div>
-          </div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-icon warning">⏰</div>
-          <div class="stat-info">
-            <div class="stat-value">${config.schedule?.morning || '06:00'}</div>
-            <div class="stat-label">早报时间</div>
-          </div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-icon primary">📋</div>
-          <div class="stat-info">
-            <div class="stat-value">${config.sections?.enabled?.length || 0} 版块</div>
-            <div class="stat-label">新闻版块</div>
-          </div>
-        </div>
-      </div>
-    </div>
-    <div class="section">
-      <div class="section-title">📋 系统状态</div>
-      <div class="status-bar">
-        <div class="status-dot ${val.valid ? 'ok' : 'error'}"></div>
-        <span class="status-text">${val.valid ? '系统配置完整' : '配置不完整: ' + (val.errors || []).join(', ')}</span>
-      </div>
-    </div>
-    <div class="section">
-      <div class="section-title">📰 最新头条</div>
-      ${news.headline?.length ? `
-        <div class="list">
-          ${news.headline.slice(0, 5).map(h => `
-            <div class="list-item">
-              <div>
-                <div class="list-item-title">${h.title || '无标题'}</div>
-                <div class="list-item-meta">${h.source || '综合'} · ${h.verified ? '✅ 已核实' : ''}</div>
-              </div>
-            </div>
-          `).join('')}
-        </div>
-      ` : '<div class="empty" style="text-align:center;padding:40px;color:var(--text-muted)">暂无新闻数据，点击下方按钮开始抓取</div>'}
-    </div>
-  `;
+/* ---------- Page helpers ---------- */
+function pageHead(title, desc, actions = '') {
+  return `<div class="page-head">
+    <div><div class="page-title">${esc(title)}</div><div class="page-desc">${esc(desc)}</div></div>
+    ${actions ? `<div class="page-head-actions">${actions}</div>` : ''}
+  </div>`;
+}
+function section(title, body, icon = '', right = '') {
+  return `<div class="section">
+    <div class="section-head">
+      <div class="section-title">${icon ? `<span class="ico">${icon}</span>` : ''}${esc(title)}</div>
+      ${right}
+    </div>${body}</div>`;
 }
 
-async function renderConfig(page) {
-  const config = State.config;
+/* ============ Dashboard ============ */
+async function pageDashboard() {
+  const [val, news] = await Promise.all([
+    API.get('/api/config/validate').catch(() => ({ valid: false, errors: ['无法校验'] })),
+    API.get('/api/news/latest').catch(() => ({ headline: [] })),
+  ]);
+  const c = State.config;
+  const enabled = c.sections?.enabled?.length || 0;
+  const headlines = news.headline || [];
+  const stat = (ico, cls, val, label) =>
+    `<div class="stat"><div class="stat-ico ${cls}">${ico}</div>
+      <div class="stat-val">${esc(val)}</div><div class="stat-label">${esc(label)}</div></div>`;
 
-  page.innerHTML = `
-    <div class="page-header">
-      <div class="page-title">配置</div>
-      <div class="page-desc">管理 AI、邮件和系统设置</div>
+  const hero = `<div class="hero"><div class="hero-in">
+    <div>
+      <div class="hero-pulse"><i></i>${val.valid ? '系统运行正常' : '配置待完善'}</div>
+      <div class="hero-title">你好，欢迎回到 <span class="grad">LumaPost</span></div>
+      <div class="hero-sub">AI 驱动的智能新闻邮件系统 · 每日 4 次自动推送 · 多提供商自由切换</div>
     </div>
-    <div class="section">
-      <div class="section-title">🤖 AI 设置</div>
-      <div class="card">
-        <div class="form-group">
-          <label class="form-label">AI 提供商</label>
-          <select class="form-input" id="cfg-ai-provider">
-            <option value="deepseek" ${config.ai?.provider === 'deepseek' ? 'selected' : ''}>DeepSeek</option>
-            <option value="openai" ${config.ai?.provider === 'openai' ? 'selected' : ''}>OpenAI</option>
-            <option value="anthropic" ${config.ai?.provider === 'anthropic' ? 'selected' : ''}>Anthropic Claude</option>
-            <option value="google" ${config.ai?.provider === 'google' ? 'selected' : ''}>Google Gemini</option>
-            <option value="qwen" ${config.ai?.provider === 'qwen' ? 'selected' : ''}>阿里通义千问</option>
-            <option value="kimi" ${config.ai?.provider === 'kimi' ? 'selected' : ''}>月之暗面 Kimi</option>
-            <option value="doubao" ${config.ai?.provider === 'doubao' ? 'selected' : ''}>字节豆包</option>
-          </select>
-        </div>
-        <div class="form-group">
-          <label class="form-label">API Key</label>
-          <input type="password" class="form-input" id="cfg-ai-apiKey" value="${config.ai?.apiKey || ''}" placeholder="sk-xxx">
-        </div>
-        <div class="form-group">
-          <label class="form-label">模型名称（可选，留空使用默认）</label>
-          <input type="text" class="form-input" id="cfg-ai-model" value="${config.ai?.model || ''}" placeholder="${config.ai?.provider || 'deepseek'} 默认模型">
-        </div>
-        <div class="form-group">
-          <label class="form-label">Temperature (${config.ai?.temperature ?? 0.7})</label>
-          <input type="range" class="form-input" id="cfg-ai-temperature" min="0" max="2" step="0.1" value="${config.ai?.temperature ?? 0.7}">
-        </div>
-      </div>
+    <div class="hero-actions">
+      <button class="btn btn-primary btn-lg" data-act="fetch">🚀 立即抓取</button>
+      <button class="btn btn-secondary btn-lg" data-act="nav" data-to="preview">👁️ 预览邮件</button>
     </div>
-    <div class="section">
-      <div class="section-title">📮 邮件设置</div>
-      <div class="card">
-        <div class="form-group">
-          <label class="form-label">邮件服务商</label>
-          <select class="form-input" id="cfg-mail-provider">
-            <option value="qq" ${config.mail?.provider === 'qq' ? 'selected' : ''}>QQ 邮箱</option>
-            <option value="netease" ${config.mail?.provider === 'netease' ? 'selected' : ''}>网易 163</option>
-            <option value="gmail" ${config.mail?.provider === 'gmail' ? 'selected' : ''}>Gmail</option>
-            <option value="outlook" ${config.mail?.provider === 'outlook' ? 'selected' : ''}>Outlook</option>
-          </select>
-        </div>
-        <div class="form-group">
-          <label class="form-label">发件邮箱</label>
-          <input type="email" class="form-input" id="cfg-mail-user" value="${config.mail?.user || ''}" placeholder="your@email.com">
-        </div>
-        <div class="form-group">
-          <label class="form-label">授权码 / 密码</label>
-          <input type="password" class="form-input" id="cfg-mail-pass" value="${config.mail?.pass || ''}" placeholder="SMTP 授权码">
-        </div>
-        <div class="form-group">
-          <label class="form-label">收件邮箱（可选）</label>
-          <input type="email" class="form-input" id="cfg-mail-to" value="${config.mail?.to || ''}" placeholder="默认同发件人">
-        </div>
-      </div>
-    </div>
-    <div class="section">
-      <div class="section-title">⏰ 定时设置</div>
-      <div class="card">
-        <div class="flex gap-2">
-          <div class="form-group" style="flex:1">
-            <label class="form-label">早报</label>
-            <input type="time" class="form-input" id="cfg-schedule-morning" value="${config.schedule?.morning || '06:00'}">
+  </div></div>`;
+
+  const banner = val.valid
+    ? `<div class="banner ok"><div class="banner-ico">✅</div><div>
+        <div class="banner-title">配置完整可用</div>
+        <div class="banner-desc">AI 与邮件服务均已配置，可以正常执行抓取与发送任务。</div></div></div>`
+    : `<div class="banner warn"><div class="banner-ico">⚠️</div><div>
+        <div class="banner-title">配置不完整</div>
+        <div class="banner-desc">${esc((val.errors || []).join(' · ') || '请前往配置页面补全信息')}</div>
+        <div class="mt-3"><button class="btn btn-sm btn-secondary" data-act="nav" data-to="config">前往配置 →</button></div></div></div>`;
+
+  const newsList = headlines.length
+    ? `<div class="card"><div class="list">${headlines.slice(0, 5).map((h, i) => `
+        <div class="list-item">
+          <div class="li-av">${i + 1}</div>
+          <div class="li-main">
+            <div class="li-title">${esc(h.title || '无标题')}</div>
+            <div class="li-meta"><span>${esc(h.source || '综合')}</span>
+              ${h.verified ? '<span class="badge ok"><i class="dot"></i>已核实</span>' : ''}</div>
           </div>
-          <div class="form-group" style="flex:1">
-            <label class="form-label">午报</label>
-            <input type="time" class="form-input" id="cfg-schedule-noon" value="${config.schedule?.noon || '12:00'}">
-          </div>
-        </div>
-        <div class="flex gap-2">
-          <div class="form-group" style="flex:1">
-            <label class="form-label">午后</label>
-            <input type="time" class="form-input" id="cfg-schedule-afternoon" value="${config.schedule?.afternoon || '17:30'}">
-          </div>
-          <div class="form-group" style="flex:1">
-            <label class="form-label">晚间</label>
-            <input type="time" class="form-input" id="cfg-schedule-evening" value="${config.schedule?.evening || '21:00'}">
-          </div>
-        </div>
-      </div>
-    </div>
-    <div class="flex gap-2">
-      <button class="btn btn-primary" onclick="saveConfig()">💾 保存配置</button>
-      <button class="btn btn-secondary" onclick="testAI()">🧪 测试 AI</button>
-      <button class="btn btn-secondary" onclick="testMail()">📧 测试邮件</button>
-    </div>
-  `;
+        </div>`).join('')}</div></div>`
+    : `<div class="card">${emptyState('📰', '暂无新闻数据', '点击「立即抓取」开始第一次新闻采集，或先完成配置。',
+        `<button class="btn btn-primary btn-sm" data-act="fetch">🚀 开始抓取</button>`)}</div>`;
+
+  return pageHead('仪表盘', '系统概览与运行状态', `<button class="btn btn-secondary btn-sm" data-act="reload">↻ 刷新</button>`) + hero +
+    `<div class="stats" style="margin-bottom:var(--s-5)">
+      ${stat('🤖', 'brand', c.ai?.provider || '未设置', 'AI 提供商')}
+      ${stat('📮', 'ok', c.mail?.provider || '未设置', '邮件服务')}
+      ${stat('⏰', 'warn', c.schedule?.morning || '06:00', '早报时间')}
+      ${stat('📋', 'info', enabled + ' 个', '新闻版块')}
+    </div>` +
+    section('系统状态', banner, '🩺') +
+    section('最新头条', newsList, '📰',
+      `<button class="btn btn-ghost btn-sm" data-act="nav" data-to="history">全部 →</button>`);
 }
 
-async function saveConfig() {
-  const cfg = {
+/* ============ Config ============ */
+const AI_FALLBACK = ['deepseek', 'openai', 'anthropic', 'google', 'qwen', 'kimi', 'doubao', 'zhipu', 'xai'];
+const MAIL_FALLBACK = ['qq', 'netease', 'gmail', 'outlook'];
+
+function opt(val, label, cur) {
+  return `<option value="${esc(val)}"${cur === val ? ' selected' : ''}>${esc(label)}</option>`;
+}
+
+async function pageConfig() {
+  if (!State.providers.length) {
+    try { State.providers = (await API.get('/api/providers')).providers || []; } catch { State.providers = []; }
+  }
+  const c = State.config;
+  const aiKeys = (State.providers.length ? State.providers.map(p => p.key) : AI_FALLBACK);
+  const aiNames = State.providers.length ? State.providers.map(p => ({ k: p.key, n: p.name })) : AI_FALLBACK.map(k => ({ k, n: k }));
+
+  const aiCard = `<div class="card"><div class="card-bd">
+    <div class="field">
+      <label class="label">AI 提供商 <span class="label-hint">可自动拉取模型</span></label>
+      <select class="select" id="f-ai-provider">
+        ${aiNames.map(p => opt(p.k, p.n, c.ai?.provider)).join('')}
+      </select>
+    </div>
+    <div class="field">
+      <label class="label">API Key</label>
+      <div class="input-wrap">
+        <input class="input" id="f-ai-key" type="password" value="${esc(c.ai?.apiKey || '')}" placeholder="sk-..." autocomplete="off">
+        <button class="input-eye" data-act="eye" data-target="f-ai-key" type="button">👁️</button>
+      </div>
+    </div>
+    <div class="field">
+      <label class="label">模型 <span class="label-hint">留空使用默认</span></label>
+      <div class="input-wrap" style="display:flex;gap:8px">
+        <input class="input" id="f-ai-model" value="${esc(c.ai?.model || '')}" placeholder="默认模型">
+        <button class="btn btn-secondary" data-act="loadmodels" type="button" style="flex:0 0 auto">拉取</button>
+      </div>
+      <div class="chips mt-3" id="modelChips"></div>
+    </div>
+    <div class="field">
+      <label class="label">Temperature <span class="range-val" id="tempVal">${(c.ai?.temperature ?? 0.7)}</span></label>
+      <input class="range" id="f-ai-temp" type="range" min="0" max="2" step="0.1" value="${c.ai?.temperature ?? 0.7}">
+      <div class="li-meta" style="justify-content:space-between"><span>精确 0</span><span>创造 2</span></div>
+    </div>
+  </div></div>`;
+
+  const mailCard = `<div class="card"><div class="card-bd">
+    <div class="field">
+      <label class="label">邮件服务商</label>
+      <select class="select" id="f-mail-provider">
+        ${MAIL_FALLBACK.map(k => opt(k, ({ qq: 'QQ 邮箱', netease: '网易 163', gmail: 'Gmail', outlook: 'Outlook' })[k], c.mail?.provider)).join('')}
+      </select>
+    </div>
+    <div class="field">
+      <label class="label">发件邮箱</label>
+      <input class="input" id="f-mail-user" type="email" value="${esc(c.mail?.user || '')}" placeholder="you@example.com">
+    </div>
+    <div class="field">
+      <label class="label">授权码 / 密码</label>
+      <div class="input-wrap">
+        <input class="input" id="f-mail-pass" type="password" value="${esc(c.mail?.pass || '')}" placeholder="SMTP 授权码" autocomplete="off">
+        <button class="input-eye" data-act="eye" data-target="f-mail-pass" type="button">👁️</button>
+      </div>
+    </div>
+    <div class="field">
+      <label class="label">收件邮箱 <span class="label-hint">留空则发给自己</span></label>
+      <input class="input" id="f-mail-to" type="email" value="${esc(c.mail?.to || '')}" placeholder="可选">
+    </div>
+  </div></div>`;
+
+  const times = [['morning', '🌅 早报'], ['noon', '☀️ 午报'], ['afternoon', '🌇 午后'], ['evening', '🌙 晚间']];
+  const schCard = `<div class="card"><div class="card-bd">
+    <div class="form-row">
+      ${times.map(([k, l]) => `<div class="field">
+        <label class="label">${l}</label>
+        <input class="input" id="f-sch-${k}" type="time" value="${esc(c.schedule?.[k] || '')}">
+      </div>`).join('')}
+    </div>
+  </div></div>`;
+
+  return pageHead('配置', 'AI、邮件与定时任务设置') +
+    section('AI 设置', aiCard, '🤖') +
+    section('邮件设置', mailCard, '📮') +
+    section('定时任务', schCard, '⏰') +
+    `<div class="sticky-actions">
+      <button class="btn btn-primary" data-act="save">💾 保存配置</button>
+      <button class="btn btn-secondary" data-act="test-ai">🧪 测试 AI</button>
+      <button class="btn btn-secondary" data-act="test-mail">📧 测试邮件</button>
+    </div>`;
+}
+
+function collectConfig() {
+  const g = (id) => $('#' + id)?.value?.trim?.() ?? '';
+  return {
     ai: {
-      provider: document.getElementById('cfg-ai-provider').value,
-      apiKey: document.getElementById('cfg-ai-apiKey').value,
-      model: document.getElementById('cfg-ai-model').value,
-      temperature: parseFloat(document.getElementById('cfg-ai-temperature').value),
+      provider: g('f-ai-provider'),
+      apiKey: g('f-ai-key'),
+      model: g('f-ai-model'),
+      temperature: parseFloat($('#f-ai-temp')?.value || '0.7'),
     },
-    mail: {
-      provider: document.getElementById('cfg-mail-provider').value,
-      user: document.getElementById('cfg-mail-user').value,
-      pass: document.getElementById('cfg-mail-pass').value,
-      to: document.getElementById('cfg-mail-to').value,
-    },
+    mail: { provider: g('f-mail-provider'), user: g('f-mail-user'), pass: g('f-mail-pass'), to: g('f-mail-to') },
     schedule: {
-      morning: document.getElementById('cfg-schedule-morning').value,
-      noon: document.getElementById('cfg-schedule-noon').value,
-      afternoon: document.getElementById('cfg-schedule-afternoon').value,
-      evening: document.getElementById('cfg-schedule-evening').value,
+      morning: g('f-sch-morning'), noon: g('f-sch-noon'),
+      afternoon: g('f-sch-afternoon'), evening: g('f-sch-evening'),
     },
   };
-
-  try {
-    showLoading();
-    const res = await API.post('/api/config', cfg);
-    hideLoading();
-    if (res.success) {
-      State.config = { ...State.config, ...cfg };
-      toast('配置保存成功！', 'success');
-    } else {
-      toast('保存失败', 'error');
-    }
-  } catch (e) {
-    hideLoading();
-    toast('保存失败: ' + e.message, 'error');
-  }
 }
 
-async function testAI() {
-  const cfg = {
-    provider: document.getElementById('cfg-ai-provider').value,
-    apiKey: document.getElementById('cfg-ai-apiKey').value,
-    model: document.getElementById('cfg-ai-model').value,
-    temperature: parseFloat(document.getElementById('cfg-ai-temperature').value),
-  };
-
-  if (!cfg.apiKey) { toast('请先设置 API Key', 'error'); return; }
-
-  try {
-    showLoading();
-    const res = await API.post('/api/test-ai', { message: '你好，请回复"连接成功"。' });
-    hideLoading();
-    if (res.success) {
-      toast(`AI 连接成功！回复: ${res.message.slice(0, 30)}`, 'success');
-    } else {
-      toast(res.error || '连接失败', 'error');
-    }
-  } catch (e) {
-    hideLoading();
-    toast('连接失败: ' + e.message, 'error');
-  }
-}
-
-async function testMail() {
-  const mailTo = document.getElementById('cfg-mail-to').value || document.getElementById('cfg-mail-user').value;
-  if (!mailTo) { toast('请先设置邮箱', 'error'); return; }
-
-  try {
-    showLoading();
-    const res = await API.post('/api/test-mail', { to: mailTo });
-    hideLoading();
-    if (res.success) {
-      toast('测试邮件已发送！', 'success');
-    } else {
-      toast(res.error || '发送失败', 'error');
-    }
-  } catch (e) {
-    hideLoading();
-    toast('发送失败: ' + e.message, 'error');
-  }
-}
-
-async function renderProviders(page) {
+/* ============ Providers ============ */
+async function pageProviders() {
   const res = await API.get('/api/providers');
   State.providers = res.providers || [];
+  const cur = State.config.ai?.provider;
+  const grid = State.providers.length
+    ? `<div class="provider-grid">${State.providers.map(p => `
+        <button class="provider ${cur === p.key ? 'active' : ''}" data-pick="${esc(p.key)}">
+          <div class="provider-av">${esc((p.name || p.key).slice(0, 1).toUpperCase())}</div>
+          <div class="provider-name">${esc(p.name || p.key)}</div>
+          <div class="provider-model">${esc(p.defaultModel || '默认模型')}</div>
+        </button>`).join('')}</div>`
+    : `<div class="card">${emptyState('🤖', '没有可用提供商', '请检查后端 providers 配置。')}</div>`;
 
-  page.innerHTML = `
-    <div class="page-header">
-      <div class="page-title">AI 提供商</div>
-      <div class="page-desc">选择 AI 提供商并挑选模型</div>
-    </div>
-    <div class="section">
-      <div class="section-title">🤖 选择提供商</div>
-      <div class="provider-grid">
-        ${State.providers.map(p => `
-          <div class="provider-card ${State.config.ai?.provider === p.key ? 'active' : ''}" onclick="selectProvider('${p.key}')">
-            <div class="provider-name">${p.name}</div>
-            <div class="provider-model">${p.defaultModel || '默认模型'}</div>
-          </div>
-        `).join('')}
-      </div>
-    </div>
-    <div class="section" id="modelSection">
-      <div class="section-title">📋 可用模型</div>
-      <div class="list" id="modelList">
-        <div class="empty" style="text-align:center;padding:40px;color:var(--text-muted)">选择提供商查看模型</div>
-      </div>
-    </div>
-  `;
+  return pageHead('AI 提供商', `共 ${State.providers.length} 家 · 点击选择后自动拉取模型`,
+    `<button class="btn btn-secondary btn-sm" data-act="nav" data-to="config">前往配置 →</button>`) +
+    section('选择提供商', grid, '🧩') +
+    section('可用模型', `<div class="card" id="modelBox">${emptyState('📋', '尚未选择提供商', '在上方点选一个提供商，即可加载模型列表。')}</div>`, '📦',
+      `<span class="badge brand" id="modelCount" style="display:none"></span>`);
 }
 
-async function selectProvider(key) {
-  document.querySelectorAll('.provider-card').forEach(c => c.classList.remove('active'));
-  event.currentTarget.classList.add('active');
-
-  State.config.ai = { ...State.config.ai, provider: key };
-  const res = await API.get(`/api/models/${key}`);
-  State.models = res.models || [];
-
-  const list = document.getElementById('modelList');
-  if (State.models.length === 0) {
-    list.innerHTML = '<div class="empty" style="text-align:center;padding:40px;color:var(--text-muted)">暂无可用模型</div>';
-    return;
-  }
-
-  list.innerHTML = State.models.map(m => `
-    <div class="list-item" onclick="selectModel('${m.id}')" style="cursor:pointer">
-      <div>
-        <div class="list-item-title">${m.name || m.id}</div>
-        <div class="list-item-meta">上下文: ${m.context || '未知'}</div>
-      </div>
-      <input type="radio" name="model" value="${m.id}" ${State.config.ai?.model === m.id ? 'checked' : ''}>
-    </div>
-  `).join('');
-}
-
-function selectModel(id) {
-  document.getElementById('cfg-ai-model').value = id;
-  State.config.ai = { ...State.config.ai, model: id };
-  toast(`已选择模型: ${id}`, 'info');
-}
-
-async function renderHistory(page) {
-  const res = await API.get('/api/config/history');
-  State.history = res;
-
-  page.innerHTML = `
-    <div class="page-header">
-      <div class="page-title">历史记录</div>
-      <div class="page-desc">查看抓取和发送历史</div>
-    </div>
-    <div class="section">
-      <div class="section-title">📰 抓取历史</div>
-      ${State.history.fetchHistory?.length ? `
-        <div class="list">
-          ${State.history.fetchHistory.map(h => `
-            <div class="list-item">
-              <div>
-                <div class="list-item-title">${h.title || '抓取任务'}</div>
-                <div class="list-item-meta">${new Date(h.time).toLocaleString('zh-CN')}</div>
-              </div>
-              <span class="badge badge-success">${h.status || '完成'}</span>
-            </div>
-          `).join('')}
-        </div>
-      ` : '<div class="empty" style="text-align:center;padding:40px;color:var(--text-muted)">暂无抓取记录</div>'}
-    </div>
-    <div class="section">
-      <div class="section-title">📧 发送历史</div>
-      ${State.history.sendHistory?.length ? `
-        <div class="list">
-          ${State.history.sendHistory.map(h => `
-            <div class="list-item">
-              <div>
-                <div class="list-item-title">${h.title || '邮件发送'}</div>
-                <div class="list-item-meta">${new Date(h.time).toLocaleString('zh-CN')}</div>
-              </div>
-              <span class="badge badge-success">${h.status || '完成'}</span>
-            </div>
-          `).join('')}
-        </div>
-      ` : '<div class="empty" style="text-align:center;padding:40px;color:var(--text-muted)">暂无发送记录</div>'}
-    </div>
-  `;
-}
-
-async function renderPreview(page) {
-  page.innerHTML = `
-    <div class="page-header">
-      <div class="page-title">邮件预览</div>
-      <div class="page-desc">选择时段预览邮件效果</div>
-    </div>
-    <div class="section">
-      <div class="flex gap-2 items-center">
-        <select class="form-input" id="previewPeriod" style="width:140px">
-          <option value="morning">🌅 早报</option>
-          <option value="noon">☀️ 午报</option>
-          <option value="afternoon">🌇 午后</option>
-          <option value="evening">🌙 晚间</option>
-        </select>
-        <button class="btn btn-primary" onclick="generatePreview()">👁️ 生成预览</button>
-      </div>
-    </div>
-    <div class="section">
-      <iframe id="previewFrame" class="preview-frame"></iframe>
-    </div>
-  `;
-}
-
-async function generatePreview() {
-  const period = document.getElementById('previewPeriod').value;
-  const frame = document.getElementById('previewFrame');
-
+async function loadModels(providerKey, boxSel = '#modelBox') {
+  const box = $(boxSel);
+  if (!box) return;
+  box.innerHTML = `<div class="card-bd">${Array.from({ length: 4 }, () => '<div class="sk sk-line"></div>').join('')}</div>`;
   try {
-    showLoading();
-    const res = await fetch(`/api/preview/${period}`);
-    const html = await res.text();
-    hideLoading();
-    frame.srcdoc = html;
-    toast('预览生成成功', 'success');
-  } catch (e) {
-    hideLoading();
-    toast('生成失败: ' + e.message, 'error');
-  }
-}
-
-async function runFetch() {
-  try {
-    showLoading();
-    const res = await API.post('/api/fetch', {});
-    hideLoading();
-    if (res.success) {
-      toast('全时段抓取已启动！', 'success');
-    } else {
-      toast(res.error || '启动失败', 'error');
+    busy(true);
+    const res = await API.get(`/api/models/${encodeURIComponent(providerKey)}`);
+    busy(false);
+    State.models = res.models || [];
+    State.modelsFor = providerKey;
+    if (!State.models.length) {
+      box.innerHTML = emptyState('📭', '暂无模型', '该提供商可能需要先填写有效 API Key，或接口不支持列出模型。');
+      return;
     }
+    const cur = State.config.ai?.model;
+    box.innerHTML = `<div class="list">${State.models.map(m => {
+      const id = m.id || m.name;
+      const active = cur === id;
+      return `<button class="list-item clickable ${active ? 'selected' : ''}" data-model="${esc(id)}">
+        <div class="li-main">
+          <div class="li-title mono">${esc(id)}</div>
+          <div class="li-meta">${m.name && m.name !== id ? `<span>${esc(m.name)}</span>` : ''}
+            ${m.context ? `<span>· 上下文 ${esc(m.context)}</span>` : ''}</div>
+        </div>
+        <span class="li-radio"></span>
+      </button>`;
+    }).join('')}</div>`;
+    const badge = $('#modelCount');
+    if (badge) { badge.style.display = ''; badge.textContent = `${State.models.length} 个模型`; }
   } catch (e) {
-    hideLoading();
-    toast('启动失败: ' + e.message, 'error');
+    busy(false);
+    box.innerHTML = emptyState('⚠️', '模型加载失败', e.message);
   }
 }
 
-async function init() {
+function renderModelChips() {
+  const wrap = $('#modelChips');
+  if (!wrap || !State.models.length) return;
+  const cur = $('#f-ai-model')?.value;
+  wrap.innerHTML = State.models.slice(0, 12).map(m => {
+    const id = m.id || m.name;
+    return `<button class="chip ${cur === id ? 'active' : ''}" data-chip="${esc(id)}">${esc(id)}</button>`;
+  }).join('');
+}
+
+/* ============ History ============ */
+async function pageHistory() {
+  const h = await API.get('/api/config/history').catch(() => ({ fetchHistory: [], sendHistory: [] }));
+  State.history = h;
+  const row = (it, ico) => `<div class="list-item">
+      <div class="li-av">${ico}</div>
+      <div class="li-main">
+        <div class="li-title">${esc(it.title || it.period || '任务记录')}</div>
+        <div class="li-meta"><span>${esc(it.time ? new Date(it.time).toLocaleString('zh-CN') : '—')}</span></div>
+      </div>
+      <span class="badge ${it.status === 'failed' || it.error ? 'err' : 'ok'}">${esc(it.status || '完成')}</span>
+    </div>`;
+
+  const fetchList = h.fetchHistory?.length
+    ? `<div class="card"><div class="list">${h.fetchHistory.map(x => row(x, '📥')).join('')}</div></div>`
+    : `<div class="card">${emptyState('📥', '暂无抓取记录', '执行一次抓取任务后，记录会显示在这里。')}</div>`;
+  const sendList = h.sendHistory?.length
+    ? `<div class="card"><div class="list">${h.sendHistory.map(x => row(x, '📤')).join('')}</div></div>`
+    : `<div class="card">${emptyState('📤', '暂无发送记录', '测试邮件或正式推送后，记录会显示在这里。')}</div>`;
+
+  return pageHead('历史记录', '抓取与发送任务日志',
+    `<button class="btn btn-danger btn-sm" data-act="clear-history">🗑 清空</button>`) +
+    section('抓取历史', fetchList, '📥') + section('发送历史', sendList, '📤');
+}
+
+/* ============ Preview ============ */
+async function pagePreview() {
+  const periods = [['morning', '🌅 早报'], ['noon', '☀️ 午报'], ['afternoon', '🌇 午后'], ['evening', '🌙 晚间']];
+  const cur = State.previewPeriod || 'morning';
+  return pageHead('邮件预览', '选择时段生成 HTML 邮件效果') +
+    section('时段选择', `<div class="card"><div class="card-bd">
+      <div class="seg" id="periodSeg">
+        ${periods.map(([k, l]) => `<button class="${cur === k ? 'active' : ''}" data-period="${k}">${l}</button>`).join('')}
+      </div>
+      <div class="mt-4"><button class="btn btn-primary btn-block" data-act="gen-preview">👁️ 生成预览</button></div>
+    </div></div>`, '🕒') +
+    section('预览结果', `<div class="preview-shell" id="previewShell">
+      ${emptyState('🖼️', '尚未生成预览', '选择时段后点击「生成预览」查看邮件渲染效果。')}
+    </div>`, '📄');
+}
+
+const PERIOD_LABEL = { morning: '🌅 早报', noon: '☀️ 午报', afternoon: '🌇 午后', evening: '🌙 晚间' };
+
+function demoEmailHtml(period) {
+  const label = PERIOD_LABEL[period] || '早报';
+  const now = new Date();
+  const date = `${now.getFullYear()}年${now.getMonth() + 1}月${now.getDate()}日`;
+  const items = [
+    ['🤖 AI 前沿', '多模态大模型进入「实时交互」阶段', '新一轮模型竞赛聚焦低延迟推理与端侧部署，推理成本持续下探。'],
+    ['💻 硬件动态', '新一代 ARM 平台能效比再创新高', '移动端 NPU 算力提升明显，端侧 AI 应用场景进一步扩大。'],
+    ['🌏 国际要闻', '全球科技产业链加速区域化重构', '多地推进本地化产能建设，供应链韧性成为核心议题。'],
+    ['💰 财经速览', '科技板块震荡上行，资金关注算力基建', '市场风险偏好回升，算力与数据中心相关标的受到关注。'],
+  ];
+  return `<!DOCTYPE html><html><head><meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1"></head>
+  <body style="margin:0;background:#f2f4f8;font-family:-apple-system,'PingFang SC','Microsoft YaHei',sans-serif;">
+  <div style="max-width:640px;margin:0 auto;background:#fff;">
+    <div style="background:linear-gradient(135deg,#6366F1,#8B5CF6 55%,#A855F7);padding:34px 28px;color:#fff;">
+      <div style="font-size:12px;letter-spacing:3px;opacity:.85;">LUMAPOST · 光影邮报</div>
+      <div style="font-size:26px;font-weight:800;margin-top:8px;letter-spacing:1px;">${label}</div>
+      <div style="font-size:13px;opacity:.9;margin-top:6px;">${date} · 示例预览</div>
+    </div>
+    <div style="padding:22px 28px 8px;">
+      <div style="background:#FFF7ED;border:1px solid #FED7AA;border-radius:12px;padding:12px 14px;font-size:12.5px;color:#9A3412;line-height:1.6;">
+        这是 <b>示例预览</b>：当前 <code>data/</code> 目录还没有真实抓取数据。执行一次「立即抓取」后，这里会显示真实生成的邮件。
+      </div>
+    </div>
+    <div style="padding:6px 28px 28px;">
+      ${items.map(([tag, title, desc]) => `
+      <div style="border-bottom:1px solid #eceff5;padding:16px 0;">
+        <div style="font-size:11.5px;font-weight:700;color:#6366F1;letter-spacing:.5px;">${tag}</div>
+        <div style="font-size:16px;font-weight:700;color:#0f172a;margin:6px 0;line-height:1.45;">${title}</div>
+        <div style="font-size:13px;color:#5A6780;line-height:1.7;">${desc}</div>
+      </div>`).join('')}
+      <div style="margin-top:22px;background:#F5F7FC;border-radius:14px;padding:16px 18px;">
+        <div style="font-size:12px;font-weight:700;color:#0f172a;margin-bottom:6px;">💬 今日一句</div>
+        <div style="font-size:13px;color:#5A6780;line-height:1.7;font-style:italic;">「把复杂留给系统，把清晰留给读者。」</div>
+      </div>
+    </div>
+    <div style="padding:18px 28px 26px;text-align:center;font-size:11px;color:#8A94A8;border-top:1px solid #eceff5;">
+      LumaPost · 光影邮报 &nbsp;|&nbsp; AI 驱动的智能新闻邮件系统<br>
+      本邮件由系统自动生成
+    </div>
+  </div></body></html>`;
+}
+
+async function genPreview() {
+  const period = State.previewPeriod || 'morning';
+  const shell = $('#previewShell');
+  if (!shell) return;
+  shell.innerHTML = `<div class="card-bd">${Array.from({ length: 6 }, () => '<div class="sk sk-line"></div>').join('')}</div>`;
+  let html = null, demo = false;
+  try {
+    busy(true);
+    const res = await fetch(`/api/preview/${period}`);
+    const text = await res.text();
+    busy(false);
+    if (res.ok && text && !/^\s*\{/.test(text)) html = text;
+    else demo = true;
+  } catch {
+    busy(false);
+    demo = true;
+  }
+  if (!html) html = demoEmailHtml(period);
+  shell.innerHTML = `<iframe class="preview-frame" id="previewFrame"></iframe>`;
+  $('#previewFrame').srcdoc = html;
+  toast(demo ? '暂无真实数据，已展示示例预览' : '预览已生成', demo ? 'info' : 'ok');
+}
+
+/* ============ Actions ============ */
+async function doSave() {
+  const cfg = collectConfig();
+  try {
+    busy(true);
+    await API.post('/api/config', cfg);
+    busy(false);
+    State.config = { ...State.config, ...cfg };
+    toast('配置已保存到本地', 'ok');
+    buzz();
+  } catch (e) { busy(false); toast('保存失败: ' + e.message, 'err'); }
+}
+async function doTestAI() {
+  const cfg = collectConfig();
+  if (!cfg.ai.apiKey) return toast('请先填写 API Key', 'err');
+  try {
+    busy(true);
+    const res = await API.post('/api/test-ai', { message: '你好，请回复"连接成功"。' });
+    busy(false);
+    if (res.success) toast('AI 连接成功：' + String(res.message || '').slice(0, 34), 'ok');
+    else toast(res.error || '连接失败', 'err');
+  } catch (e) { busy(false); toast('连接失败: ' + e.message, 'err'); }
+}
+async function doTestMail() {
+  const cfg = collectConfig();
+  const to = cfg.mail.to || cfg.mail.user;
+  if (!to) return toast('请先填写邮箱地址', 'err');
+  try {
+    busy(true);
+    const res = await API.post('/api/test-mail', { to });
+    busy(false);
+    if (res.success) toast('测试邮件已发送至 ' + to, 'ok');
+    else toast(res.error || '发送失败', 'err');
+  } catch (e) { busy(false); toast('发送失败: ' + e.message, 'err'); }
+}
+function confirmModal(title, desc, onOk, okText = '确认', danger = false) {
+  const mask = document.createElement('div');
+  mask.className = 'modal-mask';
+  mask.innerHTML = `<div class="modal">
+    <div class="modal-hd"><div class="modal-title">${esc(title)}</div><div class="modal-desc">${esc(desc)}</div></div>
+    <div class="modal-ft">
+      <button class="btn btn-secondary" data-no>取消</button>
+      <button class="btn ${danger ? 'btn-danger' : 'btn-primary'}" data-yes>${esc(okText)}</button>
+    </div></div>`;
+  document.body.appendChild(mask);
+  const close = () => mask.remove();
+  mask.addEventListener('click', (e) => {
+    if (e.target === mask || e.target.closest('[data-no]')) close();
+    if (e.target.closest('[data-yes]')) { close(); onOk(); }
+  });
+}
+async function doFetch() {
+  confirmModal('立即抓取', '将对所有已启用时段执行新闻抓取并生成邮件，可能需要数分钟。', async () => {
+    try {
+      busy(true);
+      const res = await API.post('/api/fetch', {});
+      busy(false);
+      if (res.success) { toast('抓取任务已启动', 'ok'); buzz(); } else toast(res.error || '启动失败', 'err');
+    } catch (e) { busy(false); toast('启动失败: ' + e.message, 'err'); }
+  }, '开始抓取');
+}
+async function doClearHistory() {
+  confirmModal('清空历史记录', '抓取与发送历史将被永久删除，不可恢复。', async () => {
+    try {
+      busy(true); await API.del('/api/config/history'); busy(false);
+      toast('历史已清空', 'ok'); render();
+    } catch (e) { busy(false); toast('清空失败: ' + e.message, 'err'); }
+  }, '清空', true);
+}
+
+/* ============ Event binding (delegation) ============ */
+function bind() {
+  const view = $('#view');
+  if (view.dataset.bound === '1') return;
+  view.dataset.bound = '1';
+  view.addEventListener('click', async (e) => {
+    const nav = e.target.closest('[data-nav]');
+    if (nav) return go(nav.dataset.nav);
+    const act = e.target.closest('[data-act]');
+    if (act) {
+      const a = act.dataset.act;
+      if (a === 'nav') return go(act.dataset.to);
+      if (a === 'reload') { toast('已刷新', 'info'); return render(); }
+      if (a === 'fetch') return doFetch();
+      if (a === 'save') return doSave();
+      if (a === 'test-ai') return doTestAI();
+      if (a === 'test-mail') return doTestMail();
+      if (a === 'clear-history') return doClearHistory();
+      if (a === 'gen-preview') return genPreview();
+      if (a === 'eye') {
+        const inp = $('#' + act.dataset.target);
+        if (inp) { inp.type = inp.type === 'password' ? 'text' : 'password'; act.style.color = inp.type === 'text' ? 'var(--brand-1)' : ''; }
+        return;
+      }
+      if (a === 'loadmodels') {
+        const p = $('#f-ai-provider')?.value;
+        if (!p) return toast('请先选择提供商', 'err');
+        const box = $('#modelChips');
+        if (box) box.innerHTML = '<div class="sk sk-line" style="width:120px"></div>';
+        try {
+          busy(true);
+          const res = await API.get('/api/models/' + encodeURIComponent(p));
+          busy(false);
+          State.models = res.models || [];
+          if (!State.models.length) { toast('该提供商无模型列表', 'warn'); if (box) box.innerHTML = ''; return; }
+          renderModelChips();
+          toast(`已获取 ${State.models.length} 个模型`, 'ok');
+        } catch (err) { busy(false); toast('拉取失败: ' + err.message, 'err'); if (box) box.innerHTML = ''; }
+        return;
+      }
+    }
+    const chip = e.target.closest('[data-chip]');
+    if (chip) {
+      const inp = $('#f-ai-model');
+      if (inp) inp.value = chip.dataset.chip;
+      $$('#modelChips .chip').forEach(c => c.classList.toggle('active', c === chip));
+      buzz();
+      return;
+    }
+    const pick = e.target.closest('[data-pick]');
+    if (pick) {
+      const key = pick.dataset.pick;
+      $$('.provider').forEach(p => p.classList.toggle('active', p === pick));
+      State.config.ai = { ...(State.config.ai || {}), provider: key };
+      busy(true);
+      try { await API.post('/api/config', { ai: State.config.ai }); } catch {}
+      busy(false);
+      buzz();
+      loadModels(key);
+      return;
+    }
+    const model = e.target.closest('[data-model]');
+    if (model) {
+      const id = model.dataset.model;
+      $$('#modelBox .list-item').forEach(el => el.classList.toggle('selected', el === model));
+      State.config.ai = { ...(State.config.ai || {}), model: id };
+      try { await API.post('/api/config', { ai: State.config.ai }); } catch {}
+      toast('已选择模型：' + id, 'ok');
+      buzz();
+      return;
+    }
+    const per = e.target.closest('[data-period]');
+    if (per) {
+      State.previewPeriod = per.dataset.period;
+      $$('#periodSeg button').forEach(b => b.classList.toggle('active', b === per));
+      return;
+    }
+  });
+
+  view.addEventListener('input', (e) => {
+    if (e.target.id === 'f-ai-temp') {
+      const el = $('#tempVal');
+      if (el) el.textContent = e.target.value;
+    }
+  });
+
+  view.addEventListener('change', (e) => {
+    if (e.target.id === 'f-ai-provider') {
+      const chips = $('#modelChips');
+      if (chips) chips.innerHTML = '';
+      State.models = [];
+    }
+  });
+}
+
+/* ============ Boot ============ */
+document.addEventListener('click', (e) => {
+  const nav = e.target.closest('[data-nav]');
+  if (nav) go(nav.dataset.nav);
+  const act = e.target.closest('[data-act]');
+  if (act && !$('#view').contains(act)) {
+    if (act.dataset.act === 'fetch') doFetch();
+    if (act.dataset.act === 'reload') render();
+  }
+});
+
+(async function boot() {
+  renderNav();
   try {
     State.config = await API.get('/api/config');
   } catch (e) {
-    toast('加载配置失败: ' + e.message, 'error');
+    toast('配置加载失败：' + e.message, 'err');
+    State.config = {};
   }
+  await render();
+  window.addEventListener('beforeunload', (e) => {
+    if (State.dirty) { e.preventDefault(); e.returnValue = ''; }
+  });
+})();
 
-  renderNav();
-  renderPage();
-}
-
-init();
 </script>
 </body>
 </html>
