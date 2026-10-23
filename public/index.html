@@ -452,7 +452,7 @@ textarea.input{height:auto;min-height:84px;padding:11px var(--s-3);resize:vertic
       <div class="brand-logo"><svg class="ic ic-l"><use href="#i-newspaper"/></svg></div>
       <div>
         <div class="brand-name">LumaPost</div>
-        <div class="brand-sub">GuanGying Post</div>
+        <div class="brand-sub">LumaPost Console</div>
       </div>
     </div>
     <nav class="nav" id="sideNav"></nav>
@@ -481,7 +481,8 @@ textarea.input{height:auto;min-height:84px;padding:11px var(--s-3);resize:vertic
 
 <script>
 /* ===========================================================
-   LumaPost Web UI v5.1 — App Logic (SVG icon edition)
+   LumaPost Web UI v5.0 — App Logic
+   页面: 仪表盘 / 配置 / 提供商 / 信息源 / 定时 / 历史 / 预览 / 系统
    =========================================================== */
 const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => [...r.querySelectorAll(s)];
@@ -493,9 +494,10 @@ const State = {
   config: {},
   providers: [],
   models: [],
+  modelFor: null,
   previewPeriod: 'morning',
-  history: { fetchHistory: [], sendHistory: [] },
   loading: 0,
+  scheduler: null,
 };
 
 const API = {
@@ -507,7 +509,12 @@ const API = {
     const text = await res.text();
     let data;
     try { data = text ? JSON.parse(text) : {}; } catch { data = { raw: text }; }
-    if (!res.ok) throw new Error(data.error || data.message || `HTTP ${res.status}`);
+    if (!res.ok) {
+      const err = new Error(data.error || data.message || `HTTP ${res.status}`);
+      err.code = data.code;
+      err.data = data;
+      throw err;
+    }
     return data;
   },
   get: (p) => API.req(p),
@@ -522,7 +529,7 @@ function toast(msg, type = 'info') {
   el.className = `toast ${type}`;
   el.innerHTML = `${ic(TOAST_ICON[type] || 'plus-info')}<span>${esc(msg)}</span>`;
   $('#toasts').appendChild(el);
-  const t = setTimeout(dismiss, 3200);
+  const t = setTimeout(dismiss, type === 'err' ? 5000 : 3200);
   function dismiss() { clearTimeout(t); el.classList.add('out'); setTimeout(() => el.remove(), 260); }
   el.addEventListener('click', dismiss);
 }
@@ -530,7 +537,7 @@ function busy(on) {
   State.loading = Math.max(0, State.loading + (on ? 1 : -1));
   $('#loadingBar').classList.toggle('on', State.loading > 0);
 }
-const buzz = () => { try { navigator.vibrate?.(8); } catch {} };
+const buzz = () => { try { navigator.vibrate?.(8); } catch (e) { /* noop */ } };
 
 function skeleton(rows = 4) {
   return `<div class="card card-bd">${Array.from({ length: rows }, (_, i) =>
@@ -541,24 +548,28 @@ function emptyState(icon, title, desc, actionHtml = '') {
     <div class="empty-ico">${ic(icon)}</div>
     <div class="empty-title">${esc(title)}</div>
     <div class="empty-desc">${esc(desc)}</div>
-    ${actionHtml ? `<div class="mt-3">${actionHtml}</div>` : ''}
+    ${actionHtml ? `<div class="mt-4">${actionHtml}</div>` : ''}
   </div>`;
 }
 
 /* ---------- Navigation ---------- */
 const NAV = [
   { key: 'dashboard', label: '仪表盘', icon: 'dashboard' },
-  { key: 'config', label: '配置', icon: 'settings' },
-  { key: 'providers', label: '提供商', icon: 'cpu' },
+  { key: 'config', label: '模型', icon: 'cpu' },
+  { key: 'mail', label: '邮件', icon: 'mail' },
+  { key: 'sources', label: '信息源', icon: 'globe' },
+  { key: 'schedule', label: '定时', icon: 'clock' },
   { key: 'history', label: '历史', icon: 'history' },
   { key: 'preview', label: '预览', icon: 'eye' },
+  { key: 'system', label: '系统', icon: 'settings' },
 ];
+const TAB_NAV = NAV.filter(n => ['dashboard', 'config', 'sources', 'schedule', 'system'].includes(n.key));
 
 function renderNav() {
-  $('#sideNav').innerHTML = `<div class="nav-label">导航</div>` +
+  $('#sideNav').innerHTML = `<div class="nav-label">控制台</div>` +
     NAV.map(n => `<button class="nav-item ${State.page === n.key ? 'active' : ''}" data-nav="${n.key}">
       ${ic(n.icon)}<span>${n.label}</span></button>`).join('');
-  $('#tabBar').innerHTML = NAV.map(n => `<button class="tab-item ${State.page === n.key ? 'active' : ''}" data-nav="${n.key}">
+  $('#tabBar').innerHTML = TAB_NAV.map(n => `<button class="tab-item ${State.page === n.key ? 'active' : ''}" data-nav="${n.key}">
       ${ic(n.icon)}<span>${n.label}</span></button>`).join('');
 }
 
@@ -574,7 +585,11 @@ function go(page) {
 async function render() {
   const view = $('#view');
   view.innerHTML = skeleton(5);
-  const fn = { dashboard: pageDashboard, config: pageConfig, providers: pageProviders, history: pageHistory, preview: pagePreview }[State.page];
+  const fn = {
+    dashboard: pageDashboard, config: pageConfig, mail: pageMail,
+    providers: pageProviders, sources: pageSources, schedule: pageSchedule,
+    history: pageHistory, preview: pagePreview, system: pageSystem,
+  }[State.page];
   try {
     view.innerHTML = await fn();
     bind();
@@ -600,25 +615,34 @@ function section(title, body, icon = '', right = '') {
       ${right}
     </div>${body}</div>`;
 }
+function field(label, control, hint) {
+  return `<div class="field">
+    <label class="label">${esc(label)}${hint ? `<span class="label-hint">${esc(hint)}</span>` : ''}</label>
+    ${control}
+  </div>`;
+}
 
 /* ============ Dashboard ============ */
 async function pageDashboard() {
-  const [val, news] = await Promise.all([
-    API.get('/api/config/validate').catch(() => ({ valid: false, errors: ['无法校验'] })),
+  const [val, news, sys] = await Promise.all([
+    API.get('/api/config/validate').catch(() => ({ valid: false, errors: ['无法校验'], warnings: [] })),
     API.get('/api/news/latest').catch(() => ({ headline: [] })),
+    API.get('/api/system').catch(() => ({})),
   ]);
   const c = State.config;
   const enabled = c.sections?.enabled?.length || 0;
   const headlines = news.headline || [];
-  const stat = (icon, cls, val, label) =>
+  const ok = val.valid;
+
+  const stat = (icon, cls, v, label) =>
     `<div class="stat"><div class="stat-ico ${cls}">${ic(icon)}</div>
-      <div class="stat-val">${esc(val)}</div><div class="stat-label">${esc(label)}</div></div>`;
+      <div class="stat-val">${esc(v)}</div><div class="stat-label">${esc(label)}</div></div>`;
 
   const hero = `<div class="hero"><div class="hero-in">
     <div>
-      <div class="hero-pulse ${val.valid ? 'ok' : 'warn'}"><i></i>${val.valid ? '系统运行正常' : '配置待完善'}</div>
+      <div class="hero-pulse ${ok ? 'ok' : 'warn'}"><i></i>${ok ? '配置完整，可以运行' : '配置待完善'}</div>
       <div class="hero-title">欢迎回到 <span class="grad">LumaPost</span> 光影邮报</div>
-      <div class="hero-sub">AI 驱动的智能新闻邮件系统，每日四次自动推送，多提供商自由切换。</div>
+      <div class="hero-sub">AI 驱动的智能新闻邮件系统 · 每日四次自动推送 · 配置文件本地持久化</div>
     </div>
     <div class="hero-actions">
       <button class="btn btn-primary btn-lg" data-act="fetch">${ic('rocket')}立即抓取</button>
@@ -626,14 +650,15 @@ async function pageDashboard() {
     </div>
   </div></div>`;
 
-  const banner = val.valid
+  const issues = [...(val.errors || []).map(e => ({ t: e, lv: 'err' })), ...(val.warnings || []).map(w => ({ t: w, lv: 'warn' }))];
+  const banner = ok && !issues.length
     ? `<div class="banner ok"><div class="banner-ico">${ic('check-circle')}</div><div>
         <div class="banner-title">配置完整可用</div>
-        <div class="banner-desc">AI 与邮件服务均已配置，可以正常执行抓取与发送任务。</div></div></div>`
+        <div class="banner-desc">AI 与邮件服务均已配置，抓取与发送任务可以正常执行。</div></div></div>`
     : `<div class="banner warn"><div class="banner-ico">${ic('warning')}</div><div>
-        <div class="banner-title">配置不完整</div>
-        <div class="banner-desc">${esc((val.errors || []).join(' · ') || '请前往配置页面补全信息')}</div>
-        <div class="mt-3"><button class="btn btn-sm btn-secondary" data-act="nav" data-to="config">前往配置${ic('arrow-right')}</button></div></div></div>`;
+        <div class="banner-title">${issues.length} 项待处理</div>
+        <div class="banner-desc">${esc(issues.map(i => i.t).join(' · ') || '请前往配置页面补全信息')}</div>
+        <div class="mt-4"><button class="btn btn-sm btn-secondary" data-act="nav" data-to="config">前往配置${ic('arrow-right')}</button></div></div></div>`;
 
   const newsList = headlines.length
     ? `<div class="card"><div class="list">${headlines.slice(0, 5).map((h, i) => `
@@ -645,8 +670,17 @@ async function pageDashboard() {
               ${h.verified ? `<span class="badge ok">${ic('check')}已核实</span>` : ''}</div>
           </div>
         </div>`).join('')}</div></div>`
-    : `<div class="card">${emptyState('newspaper', '暂无新闻数据', '点击「立即抓取」开始第一次新闻采集，或先完成配置。',
+    : `<div class="card">${emptyState('newspaper', '暂无新闻数据', '点击「立即抓取」开始第一次采集，或先完成配置。',
         `<button class="btn btn-primary btn-sm" data-act="fetch">${ic('rocket')}开始抓取</button>`)}</div>`;
+
+  const sysLine = `<div class="card"><div class="card-bd">
+    <div class="li-meta" style="gap:16px;flex-wrap:wrap">
+      <span>版本 <b class="mono">${esc(sys.version || '-')}</b></span>
+      <span>Node <b class="mono">${esc(sys.node || '-')}</b></span>
+      <span>监听 <b class="mono">${esc((sys.listen?.host || '-') + ':' + (sys.listen?.port || '-'))}</b></span>
+      <span>自动调度 <b>${sys.autoSchedule ? '已开启' : '已关闭'}</b></span>
+    </div>
+  </div></div>`;
 
   return pageHead('仪表盘', '系统概览与运行状态',
     `<button class="btn btn-secondary btn-sm" data-act="reload">${ic('refresh')}刷新</button>`) + hero +
@@ -654,20 +688,24 @@ async function pageDashboard() {
       ${stat('cpu', 'brand', c.ai?.provider || '未设置', 'AI 提供商')}
       ${stat('mail', 'ok', c.mail?.provider || '未设置', '邮件服务')}
       ${stat('clock', 'warn', c.schedule?.morning || '06:00', '早报时间')}
-      ${stat('list', 'info', enabled + ' 个', '新闻版块')}
+      ${stat('globe', 'info', enabled + ' 个', '新闻版块')}
     </div>` +
     section('系统状态', banner, 'stethoscope') +
+    section('运行环境', sysLine, 'monitor') +
     section('最新头条', newsList, 'newspaper',
       `<button class="btn btn-ghost btn-sm" data-act="nav" data-to="history">全部${ic('arrow-right')}</button>`);
 }
 
-/* ============ Config ============ */
-const AI_FALLBACK = ['deepseek', 'openai', 'anthropic', 'google', 'qwen', 'kimi', 'doubao', 'zhipu', 'xai'];
-const MAIL_MAP = { qq: 'QQ 邮箱', netease: '网易 163', gmail: 'Gmail', outlook: 'Outlook' };
-const PROVIDER_ICON = { deepseek: 'cpu', openai: 'bolt', anthropic: 'puzzle', google: 'globe', qwen: 'code', kimi: 'moon', doubao: 'package', zhipu: 'code', xai: 'bolt' };
+/* ============ AI 模型配置 ============ */
+const AI_FALLBACK = ['deepseek', 'openai', 'anthropic', 'google', 'qwen', 'kimi', 'doubao', 'zhipu', 'xai', 'custom'];
+const PROVIDER_ICON = {
+  deepseek: 'cpu', openai: 'bolt', anthropic: 'puzzle', google: 'globe',
+  qwen: 'code', kimi: 'moon', doubao: 'package', zhipu: 'code',
+  xai: 'bolt', custom: 'settings',
+};
 
-function opt(val, label, cur) {
-  return `<option value="${esc(val)}"${cur === val ? ' selected' : ''}>${esc(label)}</option>`;
+function opt(v, label, cur) {
+  return `<option value="${esc(v)}"${cur === v ? ' selected' : ''}>${esc(label)}</option>`;
 }
 
 async function pageConfig() {
@@ -675,211 +713,313 @@ async function pageConfig() {
     try { State.providers = (await API.get('/api/providers')).providers || []; } catch { State.providers = []; }
   }
   const c = State.config;
-  const aiNames = State.providers.length
+  const ai = c.ai || {};
+  const list = State.providers.length
     ? State.providers.map(p => ({ k: p.key, n: p.name || p.key }))
     : AI_FALLBACK.map(k => ({ k, n: k }));
+  const isCustom = ai.provider === 'custom';
+  const hasKey = !!ai.apiKey;
 
-  const aiCard = `<div class="card"><div class="card-bd">
-    <div class="field">
-      <label class="label">AI 提供商 <span class="label-hint">支持自动拉取模型</span></label>
-      <select class="select" id="f-ai-provider">
-        ${aiNames.map(p => opt(p.k, p.n, c.ai?.provider)).join('')}
-      </select>
-    </div>
-    <div class="field">
-      <label class="label">API Key</label>
-      <div class="input-wrap">
-        <input class="input" id="f-ai-key" type="password" value="${esc(c.ai?.apiKey || '')}" placeholder="sk-..." autocomplete="off" spellcheck="false">
-        <button class="input-eye" data-act="eye" data-target="f-ai-key" type="button" aria-label="显示或隐藏密钥">${ic('eye')}</button>
-      </div>
-    </div>
-    <div class="field">
-      <label class="label">模型 <span class="label-hint">留空使用默认</span></label>
-      <div style="display:flex;gap:8px">
-        <input class="input" id="f-ai-model" value="${esc(c.ai?.model || '')}" placeholder="默认模型">
+  const keyPlaceholder = hasKey && ai.apiKeyMask ? '已保存，留空保持不变' : 'sk-... 或你的密钥';
+
+  return pageHead('AI 模型', '选择提供商、配置密钥与模型',
+    `<button class="btn btn-secondary btn-sm" data-act="nav" data-to="providers">${ic('puzzle')}浏览提供商</button>`) +
+    section('连接配置', `<div class="card"><div class="card-bd">
+      ${field('AI 提供商', `<select class="select" id="f-ai-provider">
+        ${list.map(p => opt(p.k, p.n, ai.provider)).join('')}
+      </select>`)}
+
+      ${field('API Key', `<div class="input-wrap">
+        <input class="input" id="f-ai-key" type="password" value="" placeholder="${esc(keyPlaceholder)}" autocomplete="off" spellcheck="false">
+        <button class="input-eye" data-act="eye" data-target="f-ai-key" type="button" aria-label="显示密钥">${ic('eye')}</button>
+      </div>`, hasKey ? '已配置，留空则不修改' : '必填')}
+
+      ${field('Base URL（端点）', `<input class="input mono" id="f-ai-baseUrl" value="${esc(ai.baseUrl || '')}" placeholder="${isCustom ? 'https://your-api.com/v1' : '留空使用官方地址'}" autocomplete="off" spellcheck="false">`,
+        isCustom ? '自定义提供商必填，需含 /v1' : '可选，用于代理或中转')}
+
+      ${field('模型', `<div style="display:flex;gap:8px">
+        <input class="input mono" id="f-ai-model" value="${esc(ai.model || '')}" placeholder="留空使用默认模型">
         <button class="btn btn-secondary" data-act="loadmodels" type="button" style="flex:0 0 auto">${ic('refresh')}拉取</button>
       </div>
-      <div class="chips mt-3" id="modelChips"></div>
-    </div>
-    <div class="field">
-      <label class="label">Temperature <span class="range-val" id="tempVal">${c.ai?.temperature ?? 0.7}</span></label>
-      <input class="range" id="f-ai-temp" type="range" min="0" max="2" step="0.1" value="${c.ai?.temperature ?? 0.7}">
-      <div class="range-legend"><span>精确 0</span><span>均衡 1</span><span>创造 2</span></div>
-    </div>
-  </div></div>`;
+      <div class="chips mt-3" id="modelChips"></div>`, '留空则用提供商默认')}
 
-  const mailCard = `<div class="card"><div class="card-bd">
-    <div class="field">
-      <label class="label">邮件服务商</label>
-      <select class="select" id="f-mail-provider">
-        ${Object.keys(MAIL_MAP).map(k => opt(k, MAIL_MAP[k], c.mail?.provider)).join('')}
-      </select>
-    </div>
-    <div class="field">
-      <label class="label">发件邮箱</label>
-      <input class="input" id="f-mail-user" type="email" value="${esc(c.mail?.user || '')}" placeholder="you@example.com" autocomplete="off">
-    </div>
-    <div class="field">
-      <label class="label">授权码 / 密码</label>
-      <div class="input-wrap">
-        <input class="input" id="f-mail-pass" type="password" value="${esc(c.mail?.pass || '')}" placeholder="SMTP 授权码" autocomplete="off">
-        <button class="input-eye" data-act="eye" data-target="f-mail-pass" type="button" aria-label="显示或隐藏密码">${ic('eye')}</button>
+      ${field(`Temperature <span class="range-val" id="tempVal">${ai.temperature ?? 0.7}</span>`,
+        `<input class="range" id="f-ai-temp" type="range" min="0" max="2" step="0.1" value="${ai.temperature ?? 0.7}">
+         <div class="range-legend"><span>精确 0</span><span>均衡 1</span><span>创造 2</span></div>`)}
+
+      <div class="form-row">
+        ${field('超时（毫秒）', `<input class="input" id="f-ai-timeout" type="number" min="3000" max="600000" step="1000" value="${ai.timeout ?? 60000}">`)}
+        ${field('最大输出 Token', `<input class="input" id="f-ai-maxTokens" type="number" min="64" max="2000000" step="64" value="${ai.maxTokens ?? 4096}">`)}
       </div>
-    </div>
-    <div class="field">
-      <label class="label">收件邮箱 <span class="label-hint">留空则发给自己</span></label>
-      <input class="input" id="f-mail-to" type="email" value="${esc(c.mail?.to || '')}" placeholder="可选">
-    </div>
-  </div></div>`;
-
-  const times = [['morning', '早报', 'sunrise'], ['noon', '午报', 'sun'], ['afternoon', '午后', 'sunset'], ['evening', '晚间', 'moon']];
-  const schCard = `<div class="card"><div class="card-bd">
-    <div class="form-row">
-      ${times.map(([k, l, i]) => `<div class="field">
-        <label class="label">${ic(i)}${l}</label>
-        <input class="input" id="f-sch-${k}" type="time" value="${esc(c.schedule?.[k] || '')}">
-      </div>`).join('')}
-    </div>
-  </div></div>`;
-
-  return pageHead('配置', 'AI、邮件与定时任务设置') +
-    section('AI 设置', aiCard, 'cpu') +
-    section('邮件设置', mailCard, 'mail') +
-    section('定时任务', schCard, 'clock') +
+    </div></div>`, 'cpu') +
     `<div class="sticky-actions">
-      <button class="btn btn-primary" data-act="save">${ic('save')}保存配置</button>
-      <button class="btn btn-secondary" data-act="test-ai">${ic('flask')}测试 AI</button>
-      <button class="btn btn-secondary" data-act="test-mail">${ic('mail')}测试邮件</button>
+      <button class="btn btn-primary" data-act="save-ai">${ic('save')}保存配置</button>
+      <button class="btn btn-secondary" data-act="test-ai">${ic('flask')}测试连接</button>
     </div>`;
 }
 
-function collectConfig() {
+function collectAI() {
   const g = (id) => $('#' + id)?.value?.trim?.() ?? '';
-  return {
-    ai: {
-      provider: g('f-ai-provider'),
-      apiKey: g('f-ai-key'),
-      model: g('f-ai-model'),
-      temperature: parseFloat($('#f-ai-temp')?.value || '0.7'),
-    },
-    mail: { provider: g('f-mail-provider'), user: g('f-mail-user'), pass: g('f-mail-pass'), to: g('f-mail-to') },
-    schedule: {
-      morning: g('f-sch-morning'), noon: g('f-sch-noon'),
-      afternoon: g('f-sch-afternoon'), evening: g('f-sch-evening'),
-    },
+  const out = {
+    provider: g('f-ai-provider'),
+    baseUrl: g('f-ai-baseUrl'),
+    model: g('f-ai-model'),
+    temperature: parseFloat($('#f-ai-temp')?.value || '0.7'),
+    timeout: parseInt($('#f-ai-timeout')?.value || '60000', 10),
+    maxTokens: parseInt($('#f-ai-maxTokens')?.value || '4096', 10),
   };
+  const key = g('f-ai-key');
+  if (key) out.apiKey = key;              // 留空则不下发，保留原值
+  return { ai: out };
 }
 
-/* ============ Providers ============ */
-async function pageProviders() {
-  const res = await API.get('/api/providers');
-  State.providers = res.providers || [];
-  const cur = State.config.ai?.provider;
-  const grid = State.providers.length
-    ? `<div class="provider-grid">${State.providers.map(p => `
-        <button class="provider ${cur === p.key ? 'active' : ''}" data-pick="${esc(p.key)}">
-          <span class="provider-check">${ic('check')}</span>
-          <div class="provider-av">${ic(PROVIDER_ICON[p.key] || 'cpu')}</div>
-          <div class="provider-name">${esc(p.name || p.key)}</div>
-          <div class="provider-model">${esc(p.defaultModel || '默认模型')}</div>
-        </button>`).join('')}</div>`
-    : `<div class="card">${emptyState('cpu', '没有可用提供商', '请检查后端 providers 配置。')}</div>`;
+/* ============ 邮件配置 ============ */
+const MAIL_LIST = [
+  { k: 'qq', n: 'QQ 邮箱' }, { k: 'netease', n: '网易 163' },
+  { k: 'gmail', n: 'Gmail' }, { k: 'outlook', n: 'Outlook' },
+  { k: 'custom-smtp', n: '自定义 SMTP' },
+];
 
-  return pageHead('AI 提供商', `共 ${State.providers.length} 家，点击选择后自动拉取模型`,
-    `<button class="btn btn-secondary btn-sm" data-act="nav" data-to="config">前往配置${ic('arrow-right')}</button>`) +
-    section('选择提供商', grid, 'puzzle') +
-    section('可用模型',
-      `<div class="card" id="modelBox">${emptyState('list', '尚未选择提供商', '在上方点选一个提供商，即可加载模型列表。')}</div>`,
-      'package', `<span class="badge brand hidden" id="modelCount"></span>`);
+async function pageMail() {
+  const m = State.config.mail || {};
+  const hasPass = !!m.pass;
+  const isCustom = m.provider === 'custom-smtp';
+
+  return pageHead('邮件服务', '配置发件邮箱与收件人') +
+    section('发件配置', `<div class="card"><div class="card-bd">
+      ${field('邮件服务商', `<select class="select" id="f-mail-provider">
+        ${MAIL_LIST.map(x => opt(x.k, x.n, m.provider)).join('')}
+      </select>`)}
+
+      ${field('发件邮箱', `<input class="input" id="f-mail-user" type="email" value="${esc(m.user || '')}" placeholder="you@qq.com" autocomplete="off">`)}
+      ${field('授权码 / 密码', `<div class="input-wrap">
+        <input class="input" id="f-mail-pass" type="password" value="" placeholder="${hasPass ? '已保存，留空保持不变' : 'SMTP 授权码'}" autocomplete="off">
+        <button class="input-eye" data-act="eye" data-target="f-mail-pass" type="button" aria-label="显示密码">${ic('eye')}</button>
+      </div>`, hasPass ? '已配置，留空则不修改' : '必填')}
+
+      <div class="divider"></div>
+
+      ${field('收件邮箱', `<input class="input" id="f-mail-to" type="email" value="${esc(m.to || '')}" placeholder="留空则发给自己">`, '可多个，逗号分隔')}
+      ${field('发件人显示名 / 地址', `<input class="input" id="f-mail-from" value="${esc(m.from || '')}" placeholder="留空使用发件邮箱">`)}
+    </div></div>`, 'mail') +
+    section('SMTP 高级（仅自定义）', `<div class="card"><div class="card-bd ${isCustom ? '' : 'hidden'}" id="smtpBox">
+      <div class="form-row">
+        ${field('SMTP 服务器', `<input class="input mono" id="f-mail-smtpHost" value="${esc(m.smtpHost || '')}" placeholder="smtp.example.com">`)}
+        ${field('端口', `<input class="input" id="f-mail-smtpPort" type="number" min="0" max="65535" value="${m.smtpPort || 465}">`)}
+      </div>
+      <label class="switch mt-4">
+        <input type="checkbox" id="f-mail-smtpSecure" ${m.smtpSecure !== false ? 'checked' : ''}>
+        <span class="switch-track"></span>
+        <span class="switch-text">使用 SSL/TLS（端口 465 通常开启）</span>
+      </label>
+    </div>
+    <div class="card-bd ${isCustom ? 'hidden' : ''}" id="smtpHint">
+      <div class="banner"><div class="banner-ico">${ic('plus-info')}</div><div>
+        <div class="banner-title">使用预设服务商</div>
+        <div class="banner-desc">服务器地址与端口已自动匹配。如需指定，请把服务商切换为「自定义 SMTP」。</div>
+      </div></div>
+    </div></div>`, 'settings') +
+    `<div class="sticky-actions">
+      <button class="btn btn-primary" data-act="save-mail">${ic('save')}保存配置</button>
+      <button class="btn btn-secondary" data-act="test-mail">${ic('send')}发送测试</button>
+    </div>`;
 }
 
-async function loadModels(providerKey) {
-  const box = $('#modelBox');
-  if (!box) return;
-  box.innerHTML = `<div class="card-bd">${Array.from({ length: 4 }, () => '<div class="sk sk-line"></div>').join('')}</div>`;
-  try {
-    busy(true);
-    const res = await API.get(`/api/models/${encodeURIComponent(providerKey)}`);
-    busy(false);
-    State.models = res.models || [];
-    if (!State.models.length) {
-      box.innerHTML = emptyState('empty-box', '暂无模型', '该提供商可能需要先填写有效 API Key，或接口不支持列出模型。');
-      return;
-    }
-    const cur = State.config.ai?.model;
-    box.innerHTML = `<div class="list">${State.models.map(m => {
-      const id = m.id || m.name;
-      const active = cur === id;
-      return `<button class="list-item clickable ${active ? 'selected' : ''}" data-model="${esc(id)}">
+function collectMail() {
+  const g = (id) => $('#' + id)?.value?.trim?.() ?? '';
+  const out = {
+    provider: g('f-mail-provider'),
+    user: g('f-mail-user'),
+    to: g('f-mail-to'),
+    from: g('f-mail-from'),
+    smtpHost: g('f-mail-smtpHost'),
+    smtpPort: parseInt($('#f-mail-smtpPort')?.value || '0', 10) || 0,
+    smtpSecure: !!$('#f-mail-smtpSecure')?.checked,
+  };
+  const pass = g('f-mail-pass');
+  if (pass) out.pass = pass;
+  return { mail: out };
+}
+
+/* ============ 信息源 ============ */
+async function pageSources() {
+  const src = await API.get('/api/sources').catch(() => ({ rss: [], enableRss: true }));
+  const rss = src.rss || [];
+  const sections = [
+    ['ai', 'AI'], ['hardware', '硬件'], ['github', '开源'],
+    ['news', '时事'], ['games', '游戏'], ['finance', '财经'],
+    ['auto', '汽车'], ['internet', '互联网'], ['life', '生活'], ['space', '科技'],
+  ];
+  const enabled = State.config.sections?.enabled || [];
+
+  const rows = rss.length
+    ? rss.map((s, i) => `<div class="list-item" data-src-row="${i}">
         <div class="li-main">
-          <div class="li-title mono">${esc(id)}</div>
-          <div class="li-meta">${m.name && m.name !== id ? `<span>${esc(m.name)}</span>` : ''}
-            ${m.context ? `<span>上下文 ${esc(m.context)}</span>` : ''}</div>
+          <div class="li-title">${esc(s.name || '未命名源')}</div>
+          <div class="li-meta mono">${esc(s.url || '')}</div>
         </div>
-        <span class="li-radio"></span>
-      </button>`;
-    }).join('')}</div>`;
-    const badge = $('#modelCount');
-    if (badge) { badge.classList.remove('hidden'); badge.textContent = `${State.models.length} 个模型`; }
-  } catch (e) {
-    busy(false);
-    box.innerHTML = emptyState('warning', '模型加载失败', e.message);
-  }
+        <span class="badge ${s.enabled ? 'ok' : ''}">${esc(s.category || 'news')}</span>
+        <button class="icon-btn" data-act="del-src" data-idx="${i}" aria-label="删除">${ic('trash')}</button>
+      </div>`).join('')
+    : emptyState('globe', '还没有信息源', '添加 RSS 地址后，抓取任务会合并这些来源。');
+
+  return pageHead('信息源', 'RSS 订阅与新闻版块',
+    `<button class="btn btn-secondary btn-sm" data-act="save-sources">${ic('save')}保存</button>`) +
+    section('抓取版块', `<div class="card"><div class="card-bd">
+      <div class="chips" id="sectionChips">
+        ${sections.map(([k, n]) => `<button class="chip ${enabled.includes(k) ? 'active' : ''}" data-section="${k}">${n}</button>`).join('')}
+      </div>
+      <div class="li-meta mt-4">已选 <b id="secCount">${enabled.length}</b> 个版块，抓取时会按主题分类</div>
+    </div></div>`, 'list') +
+    section('RSS 订阅源', `<div class="card">
+      <div class="list" id="srcList">${rows}</div>
+      <div class="card-bd" style="border-top:1px solid var(--line)">
+        <div class="form-row">
+          ${field('名称', `<input class="input" id="new-src-name" placeholder="如：少数派">`)}
+          ${field('分类', `<select class="select" id="new-src-cat">
+            ${sections.map(([k, n]) => opt(k, n, 'news')).join('')}
+          </select>`)}
+        </div>
+        ${field('RSS 地址', `<div style="display:flex;gap:8px">
+          <input class="input mono" id="new-src-url" placeholder="https://example.com/rss">
+          <button class="btn btn-secondary" data-act="add-src" style="flex:0 0 auto">${ic('plus-info')}添加</button>
+        </div>`)}
+      </div>
+    </div>`, 'globe') +
+    `<div class="sticky-actions">
+      <button class="btn btn-primary" data-act="save-sources">${ic('save')}保存信息源</button>
+    </div>`;
 }
 
-function renderModelChips() {
-  const wrap = $('#modelChips');
-  if (!wrap || !State.models.length) return;
-  const cur = $('#f-ai-model')?.value;
-  wrap.innerHTML = State.models.slice(0, 12).map(m => {
-    const id = m.id || m.name;
-    return `<button class="chip ${cur === id ? 'active' : ''}" data-chip="${esc(id)}">${esc(id)}</button>`;
+/* ============ 定时任务 ============ */
+const SLOTS = [
+  ['morning', '早报', 'sunrise'],
+  ['noon', '午报', 'sun'],
+  ['afternoon', '午后', 'sunset'],
+  ['evening', '晚间', 'moon'],
+];
+
+async function pageSchedule() {
+  const [sch, sys] = await Promise.all([
+    API.get('/api/scheduler').catch(() => ({})),
+    API.get('/api/system').catch(() => ({})),
+  ]);
+  State.scheduler = sch;
+  const sched = State.config.schedule || {};
+  const delivery = State.config.delivery || {};
+  const autoOn = !!State.config.app?.autoSchedule;
+
+  const rows = SLOTS.map(([k, label, icon]) => {
+    const d = delivery[k] || { fetch: true, send: false };
+    return `<div class="card" style="margin-bottom:var(--s-3)"><div class="card-bd">
+      <div class="flex items-center justify-between" style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px">
+        <div class="flex items-center gap-2" style="display:flex;align-items:center;gap:8px">
+          <span class="stat-ico" style="margin:0;width:30px;height:30px;border-radius:9px">${ic(icon)}</span>
+          <b>${label}</b>
+        </div>
+        <input class="input" id="sch-${k}" type="time" value="${esc(sched[k] || '')}" style="max-width:130px">
+      </div>
+      <div style="display:flex;gap:18px;flex-wrap:wrap">
+        <label class="switch">
+          <input type="checkbox" id="dl-${k}-fetch" ${d.fetch !== false ? 'checked' : ''}>
+          <span class="switch-track"></span><span class="switch-text">自动抓取</span>
+        </label>
+        <label class="switch">
+          <input type="checkbox" id="dl-${k}-send" ${d.send ? 'checked' : ''}>
+          <span class="switch-track"></span><span class="switch-text">自动发送邮件</span>
+        </label>
+      </div>
+    </div></div>`;
   }).join('');
+
+  const logs = (sch.recentLog || []).slice(0, 8);
+  const logHtml = logs.length
+    ? `<div class="card"><div class="list">${logs.map(l => `<div class="list-item">
+        <div class="li-av">${ic(l.level === 'error' ? 'warning' : 'check')}</div>
+        <div class="li-main"><div class="li-title">${esc(l.msg)}</div>
+        <div class="li-meta mono">${esc(new Date(l.time).toLocaleTimeString('zh-CN'))}</div></div>
+      </div>`).join('')}</div></div>`
+    : `<div class="card">${emptyState('clock', '暂无调度记录', '开启自动调度并到达设定时间后，这里会显示执行记录。')}</div>`;
+
+  return pageHead('定时任务', '内置调度器，无需 crontab') +
+    section('调度开关', `<div class="card"><div class="card-bd">
+      <label class="switch" style="display:flex;width:100%">
+        <input type="checkbox" id="f-auto" ${autoOn ? 'checked' : ''}>
+        <span class="switch-track"></span>
+        <span class="switch-text"><b>启用内置自动调度</b>　${autoOn ? '每天按设定时间自动执行' : '当前关闭，仅可手动触发'}</span>
+      </label>
+      <div class="li-meta mt-4">
+        调度器状态：<b>${sch.running ? '运行中' : '未启动'}</b> ·
+        最近轮询：${sch.lastTick ? new Date(sch.lastTick).toLocaleTimeString('zh-CN') : '—'} ·
+        服务已运行 ${Math.round((sys.uptimeSec || 0) / 60)} 分钟
+      </div>
+    </div></div>`, 'clock') +
+    section('时段设置', rows, 'sunrise') +
+    `<div class="sticky-actions">
+      <button class="btn btn-primary" data-act="save-schedule">${ic('save')}保存定时设置</button>
+    </div>` +
+    section('调度日志', logHtml, 'list',
+      `<button class="btn btn-ghost btn-sm" data-act="reload">${ic('refresh')}刷新</button>`);
 }
 
-/* ============ History ============ */
+function collectSchedule() {
+  const schedule = {};
+  const delivery = {};
+  for (const [k] of SLOTS) {
+    schedule[k] = $('#' + 'sch-' + k)?.value || '06:00';
+    delivery[k] = {
+      fetch: !!$('#dl-' + k + '-fetch')?.checked,
+      send: !!$('#dl-' + k + '-send')?.checked,
+    };
+  }
+  return { schedule, delivery, app: { autoSchedule: !!$('#f-auto')?.checked } };
+}
+
+/* ============ 历史 ============ */
 async function pageHistory() {
   const h = await API.get('/api/config/history').catch(() => ({ fetchHistory: [], sendHistory: [] }));
-  State.history = h;
   const row = (it, icon) => `<div class="list-item">
       <div class="li-av">${ic(icon)}</div>
       <div class="li-main">
-        <div class="li-title">${esc(it.title || it.period || '任务记录')}</div>
-        <div class="li-meta"><span>${esc(it.time ? new Date(it.time).toLocaleString('zh-CN') : '—')}</span></div>
+        <div class="li-title">${esc(it.title || '任务记录')}</div>
+        <div class="li-meta"><span class="mono">${esc(it.time ? new Date(it.time).toLocaleString('zh-CN') : '—')}</span>
+          ${it.error ? `<span class="badge err">${esc(String(it.error).slice(0, 40))}</span>` : ''}</div>
       </div>
-      <span class="badge ${it.status === 'failed' || it.error ? 'err' : 'ok'}">${esc(it.status || '完成')}</span>
+      <span class="badge ${it.status === '失败' || it.status === 'failed' ? 'err' : (it.status === '运行中' ? 'info' : 'ok')}">${esc(it.status || '完成')}</span>
     </div>`;
 
   const fetchList = h.fetchHistory?.length
     ? `<div class="card"><div class="list">${h.fetchHistory.map(x => row(x, 'inbox')).join('')}</div></div>`
-    : `<div class="card">${emptyState('inbox', '暂无抓取记录', '执行一次抓取任务后，记录会显示在这里。')}</div>`;
+    : `<div class="card">${emptyState('inbox', '暂无抓取记录', '执行一次抓取后，记录会显示在这里。')}</div>`;
   const sendList = h.sendHistory?.length
     ? `<div class="card"><div class="list">${h.sendHistory.map(x => row(x, 'outbox')).join('')}</div></div>`
     : `<div class="card">${emptyState('outbox', '暂无发送记录', '测试邮件或正式推送后，记录会显示在这里。')}</div>`;
 
   return pageHead('历史记录', '抓取与发送任务日志',
     `<button class="btn btn-danger btn-sm" data-act="clear-history">${ic('trash')}清空</button>`) +
-    section('抓取历史', fetchList, 'inbox') + section('发送历史', sendList, 'outbox');
+    section(`抓取历史（${h.fetchHistory?.length || 0}）`, fetchList, 'inbox') +
+    section(`发送历史（${h.sendHistory?.length || 0}）`, sendList, 'outbox');
 }
 
-/* ============ Preview ============ */
-const PERIODS = [['morning', '早报', 'sunrise'], ['noon', '午报', 'sun'], ['afternoon', '午后', 'sunset'], ['evening', '晚间', 'moon']];
+/* ============ 预览 ============ */
+const PERIOD_LABEL = { morning: '早报', noon: '午报', afternoon: '午后', evening: '晚间' };
 
 async function pagePreview() {
   const cur = State.previewPeriod || 'morning';
   return pageHead('邮件预览', '选择时段生成 HTML 邮件效果') +
     section('时段选择', `<div class="card"><div class="card-bd">
       <div class="seg" id="periodSeg">
-        ${PERIODS.map(([k, l, i]) => `<button class="${cur === k ? 'active' : ''}" data-period="${k}">${ic(i)}${l}</button>`).join('')}
+        ${SLOTS.map(([k, l, i]) => `<button class="${cur === k ? 'active' : ''}" data-period="${k}">${ic(i)}${l}</button>`).join('')}
       </div>
-      <div class="mt-4"><button class="btn btn-primary btn-block" data-act="gen-preview">${ic('eye')}生成预览</button></div>
+      <div class="mt-4" style="display:flex;gap:8px">
+        <button class="btn btn-primary" style="flex:1" data-act="gen-preview">${ic('eye')}生成预览</button>
+        <button class="btn btn-secondary" style="flex:1" data-act="gen-demo">${ic('doc')}示例预览</button>
+      </div>
     </div></div>`, 'clock') +
     section('预览结果', `<div class="preview-shell" id="previewShell">
-      ${emptyState('image', '尚未生成预览', '选择时段后点击「生成预览」查看邮件渲染效果。')}
+      ${emptyState('image', '尚未生成预览', '选择时段后点击「生成预览」；若无数据可先看「示例预览」。')}
     </div>`, 'doc');
 }
-
-const PERIOD_LABEL = { morning: '早报', noon: '午报', afternoon: '午后', evening: '晚间' };
 
 function demoEmailHtml(period) {
   const label = PERIOD_LABEL[period] || '早报';
@@ -903,7 +1043,7 @@ function demoEmailHtml(period) {
     </div>
     <div style="padding:22px 28px 8px;">
       <div style="background:#FFF7ED;border:1px solid #FED7AA;border-radius:12px;padding:12px 14px;font-size:12.5px;color:#9A3412;line-height:1.6;">
-        这是<b>示例预览</b>：当前 data 目录还没有真实抓取数据。执行一次「立即抓取」后，这里会显示真实生成的邮件。
+        这是<b>示例预览</b>：data 目录还没有真实抓取数据。执行一次「立即抓取」后，这里会显示真实生成的邮件。
       </div>
     </div>
     <div style="padding:6px 28px 28px;">
@@ -929,58 +1069,230 @@ async function genPreview() {
   const shell = $('#previewShell');
   if (!shell) return;
   shell.innerHTML = `<div class="card-bd">${Array.from({ length: 6 }, () => '<div class="sk sk-line"></div>').join('')}</div>`;
-  let html = null, demo = false;
   try {
     busy(true);
     const res = await fetch(`/api/preview/${period}`);
     const text = await res.text();
     busy(false);
-    if (res.ok && text && !/^\s*\{/.test(text)) html = text;
-    else demo = true;
-  } catch {
+    if (!res.ok) {
+      let msg = '该时段暂无数据，请先执行一次抓取';
+      try { msg = JSON.parse(text).error || msg; } catch (e) { /* noop */ }
+      throw new Error(msg);
+    }
+    shell.innerHTML = `<iframe class="preview-frame" id="previewFrame" title="邮件预览"></iframe>`;
+    $('#previewFrame').srcdoc = text;
+    toast('预览已生成', 'ok');
+  } catch (e) {
     busy(false);
-    demo = true;
+    shell.innerHTML = emptyState('image', '暂无真实数据', e.message,
+      `<button class="btn btn-secondary btn-sm" data-act="gen-demo">${ic('doc')}查看示例预览</button>`);
+    toast(e.message, 'warn');
   }
-  if (!html) html = demoEmailHtml(period);
-  shell.innerHTML = `<iframe class="preview-frame" id="previewFrame" title="邮件预览"></iframe>`;
-  $('#previewFrame').srcdoc = html;
-  toast(demo ? '暂无真实数据，已展示示例预览' : '预览已生成', demo ? 'info' : 'ok');
 }
 
-/* ============ Actions ============ */
-async function doSave() {
-  const cfg = collectConfig();
+function showDemo() {
+  const shell = $('#previewShell');
+  if (!shell) return;
+  shell.innerHTML = `<iframe class="preview-frame" id="previewFrame" title="示例预览"></iframe>`;
+  $('#previewFrame').srcdoc = demoEmailHtml(State.previewPeriod || 'morning');
+  toast('已展示示例预览', 'info');
+}
+
+/* ============ 系统 ============ */
+async function pageSystem() {
+  const [sys, val] = await Promise.all([
+    API.get('/api/system').catch(() => ({})),
+    API.get('/api/config/validate').catch(() => ({ valid: false, errors: [], warnings: [] })),
+  ]);
+  const c = State.config;
+  const uptime = sys.uptimeSec || 0;
+  const upStr = uptime > 3600 ? Math.floor(uptime / 3600) + ' 小时 ' + Math.floor((uptime % 3600) / 60) + ' 分'
+    : Math.floor(uptime / 60) + ' 分 ' + (uptime % 60) + ' 秒';
+
+  const kv = (k, v, mono) => `<div class="list-item">
+      <div class="li-main"><div class="li-title">${esc(k)}</div></div>
+      <div class="mono" style="color:var(--text-2);text-align:right;word-break:break-all;max-width:60%">${esc(v)}</div>
+    </div>`;
+
+  const issues = [...(val.errors || []), ...(val.warnings || [])];
+
+  return pageHead('系统', '运行环境、监听设置与配置管理',
+    `<button class="btn btn-secondary btn-sm" data-act="reload">${ic('refresh')}刷新</button>`) +
+    section('运行信息', `<div class="card"><div class="list">
+      ${kv('LumaPost 版本', sys.version || '-')}
+      ${kv('Node.js', sys.node || '-')}
+      ${kv('平台', sys.platform || '-')}
+      ${kv('已运行', upStr)}
+      ${kv('内存占用', sys.memoryMB != null ? sys.memoryMB + ' MB' : '-')}
+      ${kv('配置文件', sys.configFile || '-')}
+      ${kv('文件存在', sys.configExists ? '是' : '否')}
+    </div></div>`, 'monitor') +
+    section('访问设置', `<div class="card"><div class="card-bd">
+      <div class="form-row">
+        ${field('端口', `<input class="input" id="f-app-port" type="number" min="1" max="65535" value="${c.app?.port ?? 3000}">`, '修改后需重启')}
+        ${field('监听地址', `<select class="select" id="f-app-host">
+          ${opt('127.0.0.1', '127.0.0.1（仅本机）', c.app?.host)}
+          ${opt('0.0.0.0', '0.0.0.0（局域网可访问）', c.app?.host)}
+        </select>`, '修改后需重启')}
+      </div>
+      <div class="banner warn mt-4"><div class="banner-ico">${ic('warning')}</div><div>
+        <div class="banner-title">关于手机访问</div>
+        <div class="banner-desc">若在 pRoot / proot 容器内运行，容器网络与手机浏览器隔离，即使设为 0.0.0.0 手机也可能无法访问。请在 Termux 或桌面系统运行。</div>
+      </div></div>
+      <div class="mt-4"><button class="btn btn-primary btn-block" data-act="save-app">${ic('save')}保存访问设置</button></div>
+    </div></div>`, 'globe') +
+    section('配置检查', issues.length
+      ? `<div class="card"><div class="list">${issues.map(t => `<div class="list-item">
+          <div class="li-av">${ic('warning')}</div>
+          <div class="li-main"><div class="li-title">${esc(t)}</div></div>
+        </div>`).join('')}</div></div>`
+      : `<div class="banner ok"><div class="banner-ico">${ic('check-circle')}</div><div>
+          <div class="banner-title">配置完整</div>
+          <div class="banner-desc">所有必填项均已配置。</div></div></div>`, 'stethoscope') +
+    section('危险操作', `<div class="card"><div class="card-bd">
+      <div class="li-meta">以下操作不可撤销，请谨慎使用。</div>
+      <div class="mt-4" style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn btn-danger btn-sm" data-act="reset-config">${ic('refresh')}重置全部配置</button>
+        <button class="btn btn-danger btn-sm" data-act="clear-history">${ic('trash')}清空历史记录</button>
+      </div>
+    </div></div>`, 'warning');
+}
+
+/* ============ 提供商浏览 ============ */
+async function pageProviders() {
+  const res = await API.get('/api/providers');
+  State.providers = res.providers || [];
+  const cur = State.config.ai?.provider;
+  const grid = State.providers.length
+    ? `<div class="provider-grid">${State.providers.map(p => `
+        <button class="provider ${cur === p.key ? 'active' : ''}" data-pick="${esc(p.key)}">
+          <span class="provider-check">${ic('check')}</span>
+          <div class="provider-av">${ic(PROVIDER_ICON[p.key] || 'cpu')}</div>
+          <div class="provider-name">${esc(p.name || p.key)}</div>
+          <div class="provider-model">${esc(p.defaultModel || '自定义')}</div>
+        </button>`).join('')}</div>`
+    : `<div class="card">${emptyState('cpu', '没有可用提供商', '请检查后端 providers 配置。')}</div>`;
+
+  return pageHead('AI 提供商', `共 ${State.providers.length} 家，点击切换并自动拉取模型`,
+    `<button class="btn btn-secondary btn-sm" data-act="nav" data-to="config">${ic('settings')}返回配置</button>`) +
+    section('全部提供商', grid, 'puzzle') +
+    section('可用模型',
+      `<div class="card" id="modelBox">${emptyState('list', '尚未选择提供商', '在上方点选一个提供商，即可加载模型列表。')}</div>`,
+      'package', `<span class="badge brand hidden" id="modelCount"></span>`);
+}
+
+async function loadModelList(providerKey) {
+  const box = $('#modelBox');
+  if (!box) return;
+  box.innerHTML = `<div class="card-bd">${Array.from({ length: 4 }, () => '<div class="sk sk-line"></div>').join('')}</div>`;
   try {
     busy(true);
-    await API.post('/api/config', cfg);
+    const keyInput = $('#f-ai-key')?.value?.trim() || '';
+    const baseInput = $('#f-ai-baseUrl')?.value?.trim() || '';
+    const qs = [];
+    if (keyInput) qs.push('apiKey=' + encodeURIComponent(keyInput));
+    if (baseInput) qs.push('baseUrl=' + encodeURIComponent(baseInput));
+    const suffix = qs.length ? '?' + qs.join('&') : '';
+    const res = await API.get(`/api/models/${encodeURIComponent(providerKey)}${suffix}`);
     busy(false);
-    State.config = { ...State.config, ...cfg };
-    toast('配置已保存到本地', 'ok');
-    buzz();
-  } catch (e) { busy(false); toast('保存失败: ' + e.message, 'err'); }
+    State.models = res.models || [];
+    if (!State.models.length) {
+      box.innerHTML = emptyState('empty-box', '暂无模型',
+        res.error || '该提供商需要先填写有效 API Key，或接口不支持列出模型。');
+      return;
+    }
+    const cur = State.config.ai?.model;
+    box.innerHTML = (res.error ? `<div class="card-bd" style="border-bottom:1px solid var(--line)">
+        <div class="li-meta" style="color:var(--warn)">${ic('warning')} 动态拉取失败，显示内置列表：${esc(res.error)}</div>
+      </div>` : '') +
+      `<div class="list">${State.models.map(m => {
+        const id = m.id || m.name;
+        const active = cur === id;
+        return `<button class="list-item clickable ${active ? 'selected' : ''}" data-model="${esc(id)}">
+          <div class="li-main">
+            <div class="li-title mono">${esc(id)}</div>
+            <div class="li-meta">${m.name && m.name !== id ? `<span>${esc(m.name)}</span>` : ''}
+              ${m.context ? `<span>上下文 ${esc(m.context)}</span>` : ''}</div>
+          </div>
+          <span class="li-radio"></span>
+        </button>`;
+      }).join('')}</div>`;
+    const badge = $('#modelCount');
+    if (badge) { badge.classList.remove('hidden'); badge.textContent = State.models.length + ' 个模型'; }
+  } catch (e) {
+    busy(false);
+    box.innerHTML = emptyState('warning', '模型加载失败', e.message);
+  }
 }
+
+function renderModelChips() {
+  const wrap = $('#modelChips');
+  if (!wrap) return;
+  if (!State.models.length) {
+    wrap.innerHTML = '<span class="li-meta">该提供商没有可用模型列表，请手动填写模型名</span>';
+    return;
+  }
+  const cur = $('#f-ai-model')?.value;
+  wrap.innerHTML = State.models.slice(0, 16).map(m => {
+    const id = m.id || m.name;
+    return `<button class="chip ${cur === id ? 'active' : ''}" data-chip="${esc(id)}">${esc(id)}</button>`;
+  }).join('');
+}
+
+/* ============ 通用保存 ============ */
+async function savePatch(patch, okMsg) {
+  try {
+    busy(true);
+    const res = await API.post('/api/config', patch);
+    busy(false);
+    if (res.success) {
+      State.config = res.config || State.config;
+      toast(okMsg || '已保存到配置文件', 'ok');
+      buzz();
+      return true;
+    }
+    toast('保存失败', 'err');
+    return false;
+  } catch (e) {
+    busy(false);
+    toast('保存失败: ' + e.message, 'err');
+    return false;
+  }
+}
+
 async function doTestAI() {
-  const cfg = collectConfig();
-  if (!cfg.ai.apiKey) return toast('请先填写 API Key', 'err');
+  const patch = collectAI();
+  const hasKey = patch.ai.apiKey || State.config.ai?.apiKeyMask;
+  if (!hasKey) return toast('请先填写 API Key', 'err');
+  const saved = await savePatch(patch, '配置已保存，正在测试…');
+  if (!saved) return;
   try {
     busy(true);
-    const res = await API.post('/api/test-ai', { message: '你好，请回复"连接成功"。' });
+    const res = await API.post('/api/test-ai', { message: '你好，请只回复四个字：连接成功' });
     busy(false);
-    if (res.success) toast('AI 连接成功：' + String(res.message || '').slice(0, 34), 'ok');
-    else toast(res.error || '连接失败', 'err');
-  } catch (e) { busy(false); toast('连接失败: ' + e.message, 'err'); }
+    toast(`连接成功 · ${res.provider}/${res.model} · ${res.latencyMs}ms`, 'ok');
+  } catch (e) {
+    busy(false);
+    toast('连接失败: ' + e.message, 'err');
+  }
 }
+
 async function doTestMail() {
-  const cfg = collectConfig();
-  const to = cfg.mail.to || cfg.mail.user;
-  if (!to) return toast('请先填写邮箱地址', 'err');
+  const patch = collectMail();
+  const hasPass = patch.mail.pass || State.config.mail?.passMask;
+  if (!patch.mail.user) return toast('请先填写发件邮箱', 'err');
+  if (!hasPass) return toast('请先填写授权码', 'err');
+  const saved = await savePatch(patch, '配置已保存，正在发送…');
+  if (!saved) return;
   try {
     busy(true);
-    const res = await API.post('/api/test-mail', { to });
+    const res = await API.post('/api/test-mail', {});
     busy(false);
-    if (res.success) toast('测试邮件已发送至 ' + to, 'ok');
-    else toast(res.error || '发送失败', 'err');
-  } catch (e) { busy(false); toast('发送失败: ' + e.message, 'err'); }
+    toast('测试邮件已发送至 ' + res.to + ' · ' + res.latencyMs + 'ms', 'ok');
+  } catch (e) {
+    busy(false);
+    toast('发送失败: ' + e.message, 'err');
+  }
 }
 
 function confirmModal(title, desc, onOk, okText = '确认', danger = false) {
@@ -999,46 +1311,126 @@ function confirmModal(title, desc, onOk, okText = '确认', danger = false) {
     if (e.target.closest('[data-yes]')) { close(); onOk(); }
   });
 }
+
 async function doFetch() {
-  confirmModal('立即抓取', '将对所有已启用时段执行新闻抓取并生成邮件，可能需要数分钟。', async () => {
+  confirmModal('立即抓取', '将按已启用版块执行新闻抓取并生成邮件，可能需要数分钟。', async () => {
     try {
       busy(true);
-      const res = await API.post('/api/fetch', {});
+      const res = await API.post('/api/fetch', { period: 'all' });
       busy(false);
-      if (res.success) { toast('抓取任务已启动', 'ok'); buzz(); } else toast(res.error || '启动失败', 'err');
-    } catch (e) { busy(false); toast('启动失败: ' + e.message, 'err'); }
+      toast(res.message || '抓取任务已启动', 'ok');
+      buzz();
+    } catch (e) {
+      busy(false);
+      toast('启动失败: ' + e.message, 'err');
+    }
   }, '开始抓取');
 }
+
 async function doClearHistory() {
   confirmModal('清空历史记录', '抓取与发送历史将被永久删除，不可恢复。', async () => {
     try {
-      busy(true); await API.del('/api/config/history'); busy(false);
-      toast('历史已清空', 'ok'); render();
-    } catch (e) { busy(false); toast('清空失败: ' + e.message, 'err'); }
+      busy(true);
+      await API.del('/api/config/history');
+      busy(false);
+      toast('历史已清空', 'ok');
+      render();
+    } catch (e) {
+      busy(false);
+      toast('清空失败: ' + e.message, 'err');
+    }
   }, '清空', true);
 }
 
-/* ============ Event binding (delegation) ============ */
+async function doResetConfig() {
+  confirmModal('重置全部配置', '所有配置（含 API Key、邮箱、定时任务、信息源）将恢复默认值，不可恢复。', async () => {
+    try {
+      busy(true);
+      await API.post('/api/config/reset', {});
+      busy(false);
+      State.config = await API.get('/api/config');
+      toast('配置已重置', 'ok');
+      render();
+    } catch (e) {
+      busy(false);
+      toast('重置失败: ' + e.message, 'err');
+    }
+  }, '确认重置', true);
+}
+
+/* ============ 信息源操作 ============ */
+function collectSections() {
+  const enabled = $$('#sectionChips .chip.active').map((c) => c.dataset.section);
+  return { sections: { enabled } };
+}
+function collectSources() {
+  const rows = $$('#srcList [data-src-row]');
+  const rss = rows.map((row) => {
+    const idx = Number(row.dataset.srcRow);
+    return State._srcCache ? State._srcCache[idx] : null;
+  }).filter(Boolean);
+  return { sources: { enableRss: true, rss } };
+}
+
+async function saveSources() {
+  try {
+    const src = await API.get('/api/sources');
+    const rows = $$('#srcList [data-src-row]');
+    const rss = [];
+    for (const row of rows) {
+      const idx = Number(row.dataset.srcRow);
+      const orig = (src.rss || [])[idx];
+      if (orig) rss.push(orig);
+    }
+    busy(true);
+    await API.post('/api/config', { sources: { enableRss: true, rss }, sections: { enabled: $$('#sectionChips .chip.active').map(c => c.dataset.section) } });
+    busy(false);
+    State.config = await API.get('/api/config');
+    toast('信息源已保存', 'ok');
+  } catch (e) {
+    busy(false);
+    toast('保存失败: ' + e.message, 'err');
+  }
+}
+
+/* ============ 事件委托 ============ */
 function bind() {
   const view = $('#view');
   if (view.dataset.bound === '1') return;
   view.dataset.bound = '1';
 
   view.addEventListener('click', async (e) => {
+    /* 导航 */
     const nav = e.target.closest('[data-nav]');
     if (nav) return go(nav.dataset.nav);
 
+    /* 动作 */
     const act = e.target.closest('[data-act]');
     if (act) {
       const a = act.dataset.act;
       if (a === 'nav') return go(act.dataset.to);
       if (a === 'reload') { toast('已刷新', 'info'); return render(); }
       if (a === 'fetch') return doFetch();
-      if (a === 'save') return doSave();
+      if (a === 'save-ai') return savePatch(collectAI(), 'AI 配置已保存');
+      if (a === 'save-mail') return savePatch(collectMail(), '邮件配置已保存');
+      if (a === 'save-schedule') return savePatch(collectSchedule(), '定时设置已保存');
+      if (a === 'save-sources') return saveSources();
+      if (a === 'save-app') {
+        const patch = {
+          app: {
+            port: parseInt($('#f-app-port')?.value || '3000', 10),
+            host: $('#f-app-host')?.value || '127.0.0.1',
+          },
+        };
+        return savePatch(patch, '访问设置已保存，重启服务后生效');
+      }
       if (a === 'test-ai') return doTestAI();
       if (a === 'test-mail') return doTestMail();
       if (a === 'clear-history') return doClearHistory();
+      if (a === 'reset-config') return doResetConfig();
       if (a === 'gen-preview') return genPreview();
+      if (a === 'gen-demo') return showDemo();
+
       if (a === 'eye') {
         const inp = $('#' + act.dataset.target);
         if (!inp) return;
@@ -1048,61 +1440,130 @@ function bind() {
         act.innerHTML = ic(show ? 'eye-off' : 'eye');
         return;
       }
+
       if (a === 'loadmodels') {
         const p = $('#f-ai-provider')?.value;
         if (!p) return toast('请先选择提供商', 'err');
-        const box = $('#modelChips');
-        if (box) box.innerHTML = '<div class="sk sk-line" style="width:120px"></div>';
+        const chips = $('#modelChips');
+        if (chips) chips.innerHTML = '<div class="sk sk-line" style="width:120px"></div>';
         try {
           busy(true);
-          const res = await API.get('/api/models/' + encodeURIComponent(p));
+          const key = $('#f-ai-key')?.value?.trim() || '';
+          const base = $('#f-ai-baseUrl')?.value?.trim() || '';
+          const qs = [];
+          if (key) qs.push('apiKey=' + encodeURIComponent(key));
+          if (base) qs.push('baseUrl=' + encodeURIComponent(base));
+          const res = await API.get('/api/models/' + encodeURIComponent(p) + (qs.length ? '?' + qs.join('&') : ''));
           busy(false);
           State.models = res.models || [];
-          if (!State.models.length) { toast('该提供商无模型列表', 'warn'); if (box) box.innerHTML = ''; return; }
+          if (res.error) toast('动态拉取失败，已回退内置列表', 'warn');
           renderModelChips();
-          toast(`已获取 ${State.models.length} 个模型`, 'ok');
-        } catch (err) { busy(false); toast('拉取失败: ' + err.message, 'err'); if (box) box.innerHTML = ''; }
+          toast('已获取 ' + State.models.length + ' 个模型', 'ok');
+        } catch (err) {
+          busy(false);
+          toast('拉取失败: ' + err.message, 'err');
+          if (chips) chips.innerHTML = '<span class="li-meta">拉取失败，可手动填写模型名</span>';
+        }
+        return;
+      }
+
+      if (a === 'del-src') {
+        const idx = Number(act.dataset.idx);
+        const src = await API.get('/api/sources').catch(() => ({ rss: [] }));
+        const rss = (src.rss || []).slice();
+        rss.splice(idx, 1);
+        try {
+          busy(true);
+          await API.post('/api/config', { sources: { enableRss: true, rss } });
+          busy(false);
+          State.config = await API.get('/api/config');
+          toast('已删除', 'ok');
+          render();
+        } catch (err) {
+          busy(false);
+          toast('删除失败: ' + err.message, 'err');
+        }
+        return;
+      }
+
+      if (a === 'add-src') {
+        const name = $('#new-src-name')?.value?.trim() || '';
+        const url = $('#new-src-url')?.value?.trim() || '';
+        const category = $('#new-src-cat')?.value || 'news';
+        if (!url) return toast('请填写 RSS 地址', 'err');
+        if (!/^https?:\/\//.test(url)) return toast('地址需以 http:// 或 https:// 开头', 'err');
+        try {
+          const src = await API.get('/api/sources').catch(() => ({ rss: [] }));
+          const rss = (src.rss || []).slice();
+          rss.push({ name: name || url.replace(/^https?:\/\//, '').split('/')[0], url, category, enabled: true });
+          busy(true);
+          await API.post('/api/config', { sources: { enableRss: true, rss } });
+          busy(false);
+          State.config = await API.get('/api/config');
+          toast('已添加信息源', 'ok');
+          render();
+        } catch (err) {
+          busy(false);
+          toast('添加失败: ' + err.message, 'err');
+        }
         return;
       }
     }
 
+    /* 模型 chip */
     const chip = e.target.closest('[data-chip]');
     if (chip) {
       const inp = $('#f-ai-model');
       if (inp) inp.value = chip.dataset.chip;
-      $$('#modelChips .chip').forEach(c => c.classList.toggle('active', c === chip));
+      $$('#modelChips .chip').forEach((c) => c.classList.toggle('active', c === chip));
       buzz();
       return;
     }
 
+    /* 版块 chip */
+    const sec = e.target.closest('[data-section]');
+    if (sec) {
+      sec.classList.toggle('active');
+      const n = $$('#sectionChips .chip.active').length;
+      const el = $('#secCount');
+      if (el) el.textContent = n;
+      buzz();
+      return;
+    }
+
+    /* 提供商卡片 */
     const pick = e.target.closest('[data-pick]');
     if (pick) {
       const key = pick.dataset.pick;
-      $$('.provider').forEach(p => p.classList.toggle('active', p === pick));
-      State.config.ai = { ...(State.config.ai || {}), provider: key };
-      busy(true);
-      try { await API.post('/api/config', { ai: State.config.ai }); } catch {}
-      busy(false);
+      $$('.provider').forEach((p) => p.classList.toggle('active', p === pick));
+      try {
+        await API.post('/api/config', { ai: { provider: key, model: '', baseUrl: key === 'custom' ? (State.config.ai?.baseUrl || '') : '' } });
+        State.config = await API.get('/api/config');
+      } catch (err) { /* noop */ }
       buzz();
-      loadModels(key);
+      loadModelList(key);
       return;
     }
 
+    /* 模型选择 */
     const model = e.target.closest('[data-model]');
     if (model) {
       const id = model.dataset.model;
-      $$('#modelBox .list-item').forEach(el => el.classList.toggle('selected', el === model));
-      State.config.ai = { ...(State.config.ai || {}), model: id };
-      try { await API.post('/api/config', { ai: State.config.ai }); } catch {}
+      $$('#modelBox .list-item').forEach((el) => el.classList.toggle('selected', el === model));
+      try {
+        await API.post('/api/config', { ai: { model: id } });
+        State.config = await API.get('/api/config');
+      } catch (err) { /* noop */ }
       toast('已选择模型：' + id, 'ok');
       buzz();
       return;
     }
 
+    /* 时段切换 */
     const per = e.target.closest('[data-period]');
     if (per) {
       State.previewPeriod = per.dataset.period;
-      $$('#periodSeg button').forEach(b => b.classList.toggle('active', b === per));
+      $$('#periodSeg button').forEach((b) => b.classList.toggle('active', b === per));
       return;
     }
   });
@@ -1119,11 +1580,20 @@ function bind() {
       const chips = $('#modelChips');
       if (chips) chips.innerHTML = '';
       State.models = [];
+      const base = $('#f-ai-baseUrl');
+      if (base) base.placeholder = e.target.value === 'custom' ? 'https://your-api.com/v1' : '留空使用官方地址';
+    }
+    if (e.target.id === 'f-mail-provider') {
+      const box = $('#smtpBox');
+      const hint = $('#smtpHint');
+      const isCustom = e.target.value === 'custom-smtp';
+      if (box) box.classList.toggle('hidden', !isCustom);
+      if (hint) hint.classList.toggle('hidden', isCustom);
     }
   });
 }
 
-/* ============ Outer shell (sidebar / topbar) ============ */
+/* ============ 外壳 ============ */
 document.addEventListener('click', (e) => {
   const nav = e.target.closest('[data-nav]');
   if (nav) { go(nav.dataset.nav); return; }
@@ -1134,7 +1604,7 @@ document.addEventListener('click', (e) => {
   }
 });
 
-/* ============ Boot ============ */
+/* ============ 启动 ============ */
 (async function boot() {
   renderNav();
   try {
