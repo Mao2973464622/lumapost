@@ -1,6 +1,13 @@
 #!/usr/bin/env node
 /**
- * web-server.js — LumaPost Web UI 服务器 (v4.2)
+ * web-server.js — LumaPost Web UI 服务器 (v5.0)
+ *
+ * 关键改进:
+ *   1. 所有业务模块统一读 config/app.json（不再只认环境变量）
+ *   2. 内置调度器，Web UI 里配置的时间真正生效
+ *   3. 监听地址可配置（127.0.0.1 / 0.0.0.0）
+ *   4. POST /api/config 带字段校验与类型收敛
+ *   5. 模型拉取支持传入临时 apiKey / baseUrl
  */
 
 const http = require('http');
@@ -8,17 +15,19 @@ const fs = require('fs');
 const path = require('path');
 const url = require('url');
 
-let configStore, aiProvider;
+let configStore, aiProvider, scheduler;
 try {
   configStore = require('./config-store');
   aiProvider = require('./ai-provider');
+  scheduler = require('./scheduler');
 } catch (e) {
-  console.error('❌ 缺少必要模块:', e.message);
+  console.error('[fatal] 缺少必要模块:', e.message);
   process.exit(1);
 }
 
-const PORT = process.env.PORT || configStore.get('app.port') || 3000;
 const PUBLIC_DIR = path.resolve(__dirname, '..', 'public');
+const DATA_DIR = path.resolve(__dirname, '..', 'data');
+const ROOT = path.resolve(__dirname, '..');
 
 const MIME = {
   '.html': 'text/html; charset=utf-8',
@@ -28,127 +37,321 @@ const MIME = {
   '.png': 'image/png',
   '.svg': 'image/svg+xml',
   '.ico': 'image/x-icon',
+  '.woff2': 'font/woff2',
 };
 
-function sendJSON(res, data, status = 200) {
-  res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8' });
+/* ---------------- helpers ---------------- */
+
+function sendJSON(res, data, status) {
+  res.writeHead(status || 200, {
+    'Content-Type': 'application/json; charset=utf-8',
+    'Cache-Control': 'no-store',
+  });
   res.end(JSON.stringify(data));
 }
 
-function sendError(res, msg, status = 500) {
-  sendJSON(res, { error: msg, success: false }, status);
+function sendError(res, msg, status) {
+  sendJSON(res, { error: msg, success: false }, status || 500);
 }
 
 function parseBody(req) {
   return new Promise((resolve, reject) => {
     let body = '';
-    req.on('data', c => {
+    req.on('data', (c) => {
       body += c.toString();
-      if (body.length > 1e6) { req.destroy(); reject(new Error('请求体过大')); }
+      if (body.length > 2e6) { req.destroy(); reject(new Error('请求体过大')); }
     });
     req.on('end', () => {
       try { resolve(body ? JSON.parse(body) : {}); }
-      catch (e) { reject(new Error('无效的 JSON')); }
+      catch (e) { reject(new Error('无效的 JSON 请求体')); }
     });
+    req.on('error', reject);
   });
 }
+
+function str(v, max) {
+  if (v === undefined || v === null) return '';
+  return String(v).slice(0, max || 500);
+}
+
+function bool(v, def) {
+  if (v === undefined) return def;
+  return v === true || v === 'true' || v === 1 || v === '1';
+}
+
+function num(v, def, min, max) {
+  const n = Number(v);
+  if (!Number.isFinite(n)) return def;
+  if (min !== undefined && n < min) return min;
+  if (max !== undefined && n > max) return max;
+  return n;
+}
+
+/**
+ * 校验并收敛前端提交的配置，防止脏数据写入 app.json
+ */
+function sanitizeConfig(input) {
+  const out = {};
+  if (!input || typeof input !== 'object') return out;
+
+  if (input.ai && typeof input.ai === 'object') {
+    out.ai = {
+      provider: str(input.ai.provider, 40).toLowerCase() || 'deepseek',
+      apiKey: str(input.ai.apiKey, 400),
+      model: str(input.ai.model, 120),
+      baseUrl: str(input.ai.baseUrl, 300),
+      timeout: num(input.ai.timeout, 60000, 3000, 600000),
+      maxTokens: num(input.ai.maxTokens, 4096, 64, 2000000),
+      temperature: num(input.ai.temperature, 0.7, 0, 2),
+    };
+  }
+
+  if (input.mail && typeof input.mail === 'object') {
+    out.mail = {
+      provider: str(input.mail.provider, 40).toLowerCase() || 'qq',
+      user: str(input.mail.user, 200),
+      pass: str(input.mail.pass, 400),
+      from: str(input.mail.from, 200),
+      to: str(input.mail.to, 400),
+      smtpHost: str(input.mail.smtpHost, 200),
+      smtpPort: num(input.mail.smtpPort, 0, 0, 65535),
+      smtpSecure: bool(input.mail.smtpSecure, true),
+    };
+  }
+
+  if (input.weather && typeof input.weather === 'object') {
+    out.weather = {
+      lat: str(input.weather.lat, 20),
+      lon: str(input.weather.lon, 20),
+      city: str(input.weather.city, 60),
+    };
+  }
+
+  if (input.app && typeof input.app === 'object') {
+    out.app = {
+      port: num(input.app.port, 3000, 1, 65535),
+      host: str(input.app.host, 60) || '127.0.0.1',
+      language: str(input.app.language, 20) || 'zh-CN',
+      theme: str(input.app.theme, 20) || 'auto',
+      autoSchedule: bool(input.app.autoSchedule, false),
+    };
+  }
+
+  if (input.sections && Array.isArray(input.sections.enabled)) {
+    out.sections = { enabled: input.sections.enabled.slice(0, 50).map((s) => str(s, 30)) };
+  }
+
+  if (input.sources && typeof input.sources === 'object') {
+    const rss = Array.isArray(input.sources.rss) ? input.sources.rss : [];
+    out.sources = {
+      enableRss: bool(input.sources.enableRss, true),
+      rss: rss.slice(0, 40).map((s) => ({
+        name: str(s && s.name, 60),
+        url: str(s && s.url, 400),
+        category: str(s && s.category, 30) || 'news',
+        enabled: bool(s && s.enabled, true),
+      })),
+    };
+  }
+
+  if (input.schedule && typeof input.schedule === 'object') {
+    const re = /^([01]\d|2[0-3]):([0-5]\d)$/;
+    out.schedule = {};
+    for (const k of ['morning', 'noon', 'afternoon', 'evening']) {
+      const v = str(input.schedule[k], 5);
+      out.schedule[k] = re.test(v) ? v : '06:00';
+    }
+  }
+
+  if (input.delivery && typeof input.delivery === 'object') {
+    out.delivery = {};
+    for (const k of ['morning', 'noon', 'afternoon', 'evening']) {
+      const d = input.delivery[k] || {};
+      out.delivery[k] = { fetch: bool(d.fetch, true), send: bool(d.send, false) };
+    }
+  }
+
+  return out;
+}
+
+function readLatestNews() {
+  const files = ['morning', 'noon', 'afternoon', 'evening'].map((p) => p + '-latest.json');
+  let latest = null;
+  let latestTime = 0;
+  for (const f of files) {
+    const fp = path.join(DATA_DIR, f);
+    try {
+      if (fs.existsSync(fp)) {
+        const st = fs.statSync(fp);
+        if (st.mtimeMs > latestTime) {
+          latestTime = st.mtimeMs;
+          latest = JSON.parse(fs.readFileSync(fp, 'utf8'));
+        }
+      }
+    } catch (e) { /* 跳过损坏文件 */ }
+  }
+  return latest || { headline: [], sections: [] };
+}
+
+/* ---------------- API ---------------- */
 
 async function handleAPI(req, res) {
   const u = url.parse(req.url, true);
   const p = u.pathname;
   const m = req.method;
-  
+
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
   if (m === 'OPTIONS') { res.writeHead(204); return res.end(); }
-  
+
   try {
-    // Config
-    if (p === '/api/config' && m === 'GET') return sendJSON(res, configStore.getAll());
+    /* ---- 配置 ---- */
+    if (p === '/api/config' && m === 'GET') {
+      const all = configStore.getAll();
+      // 不回传明文密钥，用掩码代替；前端提交时若仍为掩码则保留原值
+      const safe = JSON.parse(JSON.stringify(all));
+      if (safe.ai && safe.ai.apiKey) safe.ai.apiKeyMask = '••••••••';
+      if (safe.mail && safe.mail.pass) safe.mail.passMask = '••••••••';
+      return sendJSON(res, safe);
+    }
+
     if (p === '/api/config' && m === 'POST') {
       const body = await parseBody(req);
-      const ok = configStore.update(body);
+      const clean = sanitizeConfig(body);
+      // 若前端回传的是掩码，保留原值
+      if (clean.ai && clean.ai.apiKey === '••••••••') delete clean.ai.apiKey;
+      if (clean.mail && clean.mail.pass === '••••••••') delete clean.mail.pass;
+      const ok = configStore.update(clean);
+      return sendJSON(res, { success: ok, config: configStore.getAll() });
+    }
+
+    if (p === '/api/config/validate' && m === 'GET') {
+      return sendJSON(res, configStore.validate());
+    }
+
+    if (p === '/api/config/reset' && m === 'POST') {
+      const ok = configStore.reset();
       return sendJSON(res, { success: ok });
     }
-    if (p === '/api/config/validate' && m === 'GET') return sendJSON(res, configStore.validate());
+
     if (p === '/api/config/history' && m === 'DELETE') {
-      configStore.update({ history: { fetchHistory: [], sendHistory: [] } });
+      configStore.clearHistory();
       return sendJSON(res, { success: true });
     }
-    
-    // Providers
-    if (p === '/api/providers' && m === 'GET') return sendJSON(res, { providers: aiProvider.listProviders() });
-    
-    // Models
+
+    if (p === '/api/config/history' && m === 'GET') {
+      const c = configStore.getAll();
+      return sendJSON(res, c.history || { fetchHistory: [], sendHistory: [] });
+    }
+
+    /* ---- 提供商 / 模型 ---- */
+    if (p === '/api/providers' && m === 'GET') {
+      return sendJSON(res, { providers: aiProvider.listProviders() });
+    }
+
     if (p === '/api/models' && m === 'GET') {
-      const models = await aiProvider.listModels();
-      return sendJSON(res, { models });
+      try {
+        const models = await aiProvider.listModels(null, {
+          apiKey: u.query.apiKey,
+          baseUrl: u.query.baseUrl,
+        });
+        return sendJSON(res, { models });
+      } catch (e) {
+        return sendJSON(res, {
+          models: e.staticFallback || [],
+          error: e.message,
+          fallback: true,
+        });
+      }
     }
-    if (p.startsWith('/api/models/') && m === 'GET') {
-      const provider = p.split('/')[3];
-      const models = await aiProvider.listModels(provider);
-      return sendJSON(res, { provider, models });
+
+    if (p.indexOf('/api/models/') === 0 && m === 'GET') {
+      const providerKey = p.split('/')[3];
+      try {
+        const models = await aiProvider.listModels(providerKey, {
+          apiKey: u.query.apiKey,
+          baseUrl: u.query.baseUrl,
+        });
+        return sendJSON(res, { provider: providerKey, models });
+      } catch (e) {
+        return sendJSON(res, {
+          provider: providerKey,
+          models: e.staticFallback || [],
+          error: e.message,
+          fallback: true,
+        });
+      }
     }
-    
-    // Test AI
+
+    /* ---- 测试 ---- */
     if (p === '/api/test-ai' && m === 'POST') {
       const body = await parseBody(req);
-      const result = await aiProvider.chat([
-        { role: 'user', content: body.message || '你好，请回复"连接成功"。' }
-      ], { model: body.model, temperature: body.temperature || 0.7, maxTokens: 100 });
-      return sendJSON(res, { success: true, message: result });
+      const t0 = Date.now();
+      const result = await aiProvider.chat(
+        [{ role: 'user', content: body.message || '你好，请只回复四个字：连接成功' }],
+        { model: body.model, temperature: Number(body.temperature) || 0.7, maxTokens: 120 }
+      );
+      const cfg = aiProvider.getConfig();
+      return sendJSON(res, {
+        success: true,
+        message: result,
+        provider: cfg.providerName,
+        model: cfg.model,
+        latencyMs: Date.now() - t0,
+      });
     }
-    
-    // Test Mail
+
     if (p === '/api/test-mail' && m === 'POST') {
       const body = await parseBody(req);
       const mailProvider = require('./mail-provider');
+      const cfg = configStore.getAll();
+      const to = body.to || cfg.mail.to || cfg.mail.user;
+      if (!to) return sendError(res, '未设置收件邮箱', 400);
+      const t0 = Date.now();
       const result = await mailProvider.send({
-        to: body.to || configStore.get('mail.to') || configStore.get('mail.user'),
-        subject: '🧪 LumaPost 邮件测试',
-        html: '<h1>测试成功！</h1><p>如果您看到此邮件，说明 LumaPost 邮件服务配置正确。</p>',
+        to: to,
+        subject: 'LumaPost 邮件测试',
+        html: '<div style="font-family:sans-serif;padding:24px"><h2>测试成功</h2>'
+          + '<p>如果你看到这封邮件，说明 LumaPost 邮件服务配置正确。</p>'
+          + '<p style="color:#888;font-size:12px">发送时间：' + new Date().toLocaleString('zh-CN') + '</p></div>',
       });
-      return sendJSON(res, { success: true, result });
+      return sendJSON(res, { success: true, result: result, to: to, latencyMs: Date.now() - t0 });
     }
-    
-    // Fetch news
+
+    /* ---- 抓取 ---- */
     if (p === '/api/fetch' && m === 'POST') {
+      const body = await parseBody(req);
+      const period = body.period || 'all';
       const { spawn } = require('child_process');
-      const child = spawn('node', ['scripts/fetch-news-ai.js', '--period=all'], {
-        cwd: path.resolve(__dirname, '..'), detached: true, stdio: 'ignore',
+      const child = spawn(process.execPath, ['scripts/fetch-news-ai.js', '--period=' + period], {
+        cwd: ROOT, detached: true, stdio: 'ignore',
       });
       child.unref();
-      configStore.addHistory('fetchHistory', { title: '全时段新闻抓取', status: '运行中' });
-      return sendJSON(res, { success: true, message: '已启动全时段抓取' });
+      configStore.addHistory('fetchHistory', {
+        title: (period === 'all' ? '全时段' : period) + '新闻抓取',
+        status: '运行中',
+      });
+      return sendJSON(res, { success: true, message: '已启动 ' + period + ' 抓取' });
     }
-    
-    // Latest news
+
     if (p === '/api/news/latest' && m === 'GET') {
-      const dataDir = path.resolve(__dirname, '..', 'data');
-      const files = ['morning-latest.json', 'noon-latest.json', 'afternoon-latest.json', 'evening-latest.json'];
-      let latest = null, latestTime = 0;
-      for (const f of files) {
-        const fp = path.join(dataDir, f);
-        if (fs.existsSync(fp)) {
-          const st = fs.statSync(fp);
-          if (st.mtimeMs > latestTime) { latestTime = st.mtimeMs; latest = JSON.parse(fs.readFileSync(fp, 'utf8')); }
-        }
-      }
-      return sendJSON(res, latest || { headline: [], sections: [] });
+      return sendJSON(res, readLatestNews());
     }
-    
-    // Preview
-    if (p.startsWith('/api/preview/') && m === 'GET') {
+
+    /* ---- 预览 ---- */
+    if (p.indexOf('/api/preview/') === 0 && m === 'GET') {
       const period = p.split('/')[3];
       const valid = ['morning', 'noon', 'afternoon', 'evening'];
-      if (!valid.includes(period)) return sendError(res, '无效的时段', 400);
-      
-      const dataFile = path.resolve(__dirname, '..', 'data', `${period}-latest.json`);
-      const htmlFile = path.resolve(__dirname, '..', 'data', `${period}-email.html`);
-      
-      if (!fs.existsSync(dataFile)) return sendError(res, '该时段暂无数据', 404);
-      
+      if (valid.indexOf(period) < 0) return sendError(res, '无效的时段', 400);
+
+      const dataFile = path.join(DATA_DIR, period + '-latest.json');
+      const htmlFile = path.join(DATA_DIR, period + '-email.html');
+
+      if (!fs.existsSync(dataFile)) {
+        return sendJSON(res, { error: '该时段暂无数据，请先执行一次抓取', code: 'NO_DATA' }, 404);
+      }
+
       if (fs.existsSync(htmlFile)) {
         const ds = fs.statSync(dataFile);
         const hs = fs.statSync(htmlFile);
@@ -158,54 +361,147 @@ async function handleAPI(req, res) {
           return res.end(html);
         }
       }
-      
+
       try {
         const { spawnSync } = require('child_process');
-        spawnSync('node', ['scripts/gen-html.js', `--data-file=${dataFile}`, `--output=${htmlFile}`], {
-          cwd: path.resolve(__dirname, '..'),
-        });
+        spawnSync(process.execPath, ['scripts/gen-html.js',
+          '--data-file=' + dataFile, '--output=' + htmlFile], { cwd: ROOT, timeout: 30000 });
         if (fs.existsSync(htmlFile)) {
           const html = fs.readFileSync(htmlFile, 'utf8');
           res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
           return res.end(html);
         }
-      } catch (e) {}
+      } catch (e) { /* fallthrough */ }
       return sendError(res, '生成预览失败');
     }
-    
-    return sendError(res, 'API 不存在', 404);
+
+    /* ---- 调度器 ---- */
+    if (p === '/api/scheduler' && m === 'GET') {
+      return sendJSON(res, scheduler.status());
+    }
+
+    if (p === '/api/scheduler/trigger' && m === 'POST') {
+      const body = await parseBody(req);
+      const slot = body.slot || 'morning';
+      if (scheduler.SLOTS.indexOf(slot) < 0) return sendError(res, '无效的时段', 400);
+      scheduler.fire(slot);
+      return sendJSON(res, { success: true, message: '已手动触发 ' + slot });
+    }
+
+    /* ---- 系统信息 ---- */
+    if (p === '/api/system' && m === 'GET') {
+      const cfg = configStore.getAll();
+      let nodeVer = process.version;
+      let plat = process.platform + ' ' + process.arch;
+      let mem = null;
+      try { mem = process.memoryUsage(); } catch (e) {}
+      return sendJSON(res, {
+        version: cfg.version,
+        node: nodeVer,
+        platform: plat,
+        uptimeSec: Math.round(process.uptime()),
+        memoryMB: mem ? Math.round(mem.rss / 1048576) : null,
+        configFile: configStore.CONFIG_FILE,
+        configExists: fs.existsSync(configStore.CONFIG_FILE),
+        listen: { host: process.env.HOST || cfg.app.host, port: process.env.PORT || cfg.app.port },
+        autoSchedule: !!cfg.app.autoSchedule,
+        updatedAt: cfg.updatedAt,
+      });
+    }
+
+    /* ---- 信息源 ---- */
+    if (p === '/api/sources' && m === 'GET') {
+      const cfg = configStore.getAll();
+      return sendJSON(res, cfg.sources || { rss: [], enableRss: false });
+    }
+
+    if (p === '/api/sources' && m === 'POST') {
+      const body = await parseBody(req);
+      const clean = sanitizeConfig({ sources: body }).sources;
+      if (!clean) return sendError(res, '无效的信息源配置', 400);
+      configStore.update({ sources: clean });
+      return sendJSON(res, { success: true, sources: clean });
+    }
+
+    return sendError(res, 'API 不存在: ' + p, 404);
   } catch (e) {
-    return sendError(res, e.message);
+    console.error('[api] ' + p + ' -> ' + e.message);
+    return sendError(res, e.message, 500);
   }
 }
+
+/* ---------------- static ---------------- */
 
 function serveStatic(req, res) {
   let fp = url.parse(req.url).pathname;
   if (fp === '/') fp = '/index.html';
-  const full = path.join(PUBLIC_DIR, fp);
-  if (!full.startsWith(PUBLIC_DIR)) { res.writeHead(403); return res.end(); }
+  const full = path.normalize(path.join(PUBLIC_DIR, fp));
+  if (full.indexOf(PUBLIC_DIR) !== 0) {
+    res.writeHead(403); return res.end('Forbidden');
+  }
   fs.readFile(full, (err, data) => {
-    if (err) { res.writeHead(404); return res.end('Not Found'); }
+    if (err) {
+      res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' });
+      return res.end('Not Found');
+    }
     const ext = path.extname(full).toLowerCase();
-    const mime = MIME[ext] || 'application/octet-stream';
-    res.writeHead(200, { 'Content-Type': mime });
+    res.writeHead(200, {
+      'Content-Type': MIME[ext] || 'application/octet-stream',
+      'Cache-Control': 'no-cache',
+    });
     res.end(data);
   });
 }
 
-const server = http.createServer(async (req, res) => {
-  const p = url.parse(req.url).pathname;
-  if (p.startsWith('/api/')) return handleAPI(req, res);
-  return serveStatic(req, res);
-});
+/* ---------------- boot ---------------- */
 
-server.listen(PORT, '127.0.0.1', () => {
-  console.log(`
-╔═══════════════════════════════════════════════╗
-║  📰 LumaPost 光影邮报 Web UI v4.2              ║
-║  🌐 访问地址: http://127.0.0.1:${PORT}           ║
-╚═══════════════════════════════════════════════╝
-`);
-});
+function startServer() {
+  const cfg = configStore.getAll();
+  const PORT = Number(process.env.PORT) || Number(cfg.app.port) || 3000;
+  const HOST = process.env.HOST || cfg.app.host || '127.0.0.1';
 
-module.exports = server;
+  const server = http.createServer((req, res) => {
+    const p = url.parse(req.url).pathname;
+    if (p.indexOf('/api/') === 0) return handleAPI(req, res);
+    return serveStatic(req, res);
+  });
+
+  server.on('error', (e) => {
+    if (e.code === 'EADDRINUSE') {
+      console.error('[fatal] 端口 ' + PORT + ' 已被占用，请修改 config/app.json 的 app.port');
+    } else {
+      console.error('[fatal] ' + e.message);
+    }
+    process.exit(1);
+  });
+
+  server.listen(PORT, HOST, () => {
+    const showHost = HOST === '0.0.0.0' ? '127.0.0.1' : HOST;
+    console.log('');
+    console.log('  LumaPost Web UI v' + cfg.version);
+    console.log('  ------------------------------------------');
+    console.log('  本地访问 : http://' + showHost + ':' + PORT);
+    if (HOST === '0.0.0.0') console.log('  局域网   : http://<本机IP>:' + PORT);
+    console.log('  配置文件 : ' + configStore.CONFIG_FILE);
+    console.log('  定时调度 : ' + (cfg.app.autoSchedule ? '已启用' : '已关闭') +
+      ' (' + Object.values(cfg.schedule || {}).join(' / ') + ')');
+    console.log('  ------------------------------------------');
+    console.log('');
+    scheduler.start();
+  });
+
+  // 优雅退出
+  const shutdown = () => {
+    try { scheduler.stop(); } catch (e) {}
+    server.close(() => process.exit(0));
+    setTimeout(() => process.exit(0), 1500);
+  };
+  process.on('SIGINT', shutdown);
+  process.on('SIGTERM', shutdown);
+
+  return server;
+}
+
+if (require.main === module) startServer();
+
+module.exports = { startServer };
