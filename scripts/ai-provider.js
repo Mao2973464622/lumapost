@@ -1,291 +1,290 @@
 #!/usr/bin/env node
 /**
- * ai-provider.js — 统一 AI 模型调用层
- *
- * 作用：屏蔽不同 AI 提供商的 API 差异，用同一套接口调用任何 LLM。
- *
- * 支持的提供商（在 .env 用 AI_PROVIDER 指定）：
- *   - deepseek       → DeepSeek (推荐，¥1/百万 token)
- *   - minimax        → MiniMax (官方模型)
- *   - openai         → OpenAI (GPT-4o, GPT-5)
- *   - anthropic      → Claude (Sonnet, Opus)
- *   - google         → Google Gemini
- *   - qwen           → 阿里通义千问
- *   - zhipu          → 智谱 GLM-4
- *   - doubao         → 字节豆包
- *   - kimi           → 月之暗面 Kimi
- *   - moonshot       → Moonshot
- *   - xai            → xAI Grok
- *   - minimodel      → 面壁智能 MiniCPM
- *   - yi             → 零一万物 Yi
- *   - together       → Together AI
- *   - stepfun        → 阶跃星辰
- *   - mimor          → 小米 Mimo
- *   - kling          → 快手可灵/万擎
- *   - hunyuan        → 腾讯混元
- *   - pangu          → 华为盘古
- *   - sensenova      → 商汤日日新
- *   - iflytek        → 讯飞星火
- *   - ernie          → 百度文心一言
- *   - groq           → Groq (极速推理)
- *   - openrouter     → OpenRouter (多模型聚合)
- *   - siliconflow    → 硅基流动
- *   - tokenhub       → TokenHub (腾讯云聚合)
- *   - alibabacloud   → 阿里云百炼
- *   - custom         → 自定义 OpenAI 兼容协议
- *
- * 用法（在其他脚本里）：
- *   const ai = require('./ai-provider');
- *   const text = await ai.chat([
- *     { role: 'system', content: '你是新闻编辑' },
- *     { role: 'user',   content: '总结今天的新闻' }
- *   ]);
- *
- * 环境变量（在 .env / GitHub Secrets 设置）：
- *   AI_PROVIDER  = deepseek             # 选哪家
- *   AI_API_KEY   = sk-xxx               # 你的 API Key
- *   AI_MODEL     = deepseek-v4-flash    # 模型名（可选，有默认值）
- *   AI_BASE_URL  = https://api.deepseek.com  # 自定义 base URL（可选）
- *   AI_TIMEOUT   = 60000                # 超时（毫秒，可选）
- *   AI_MAX_TOKENS= 4096                 # 单次最大输出（可选）
- *   AI_TEMP      = 0.7                  # 创造性（0-1，可选）
+ * ai-provider.js — 统一 AI 模型调用层 (v4.2)
+ * 
+ * 修复:
+ *   - Google Gemini 系统消息正确传递 (systemInstruction)
+ *   - Anthropic API 版本更新
+ *   - 所有模型列表更新到 2026.10
+ *   - 添加 listModels() 动态获取模型列表
  */
+
 const https = require('https');
 const http = require('http');
 const { URL } = require('url');
 try { require('dotenv').config(); } catch(e) {}
-// ─────────────────────────────────────────────────────────────
-//  各大提供商的预设（base URL + 默认模型）- 2026年10月最新版
-// ─────────────────────────────────────────────────────────────
+
 const PROVIDERS = {
-  // ========== 原有主流提供商 ==========
   deepseek: {
     name: 'DeepSeek',
     baseUrl: 'https://api.deepseek.com',
     defaultModel: 'deepseek-v4-flash',
     envKey: 'DEEPSEEK_API_KEY',
-    models: ['deepseek-v4-flash', 'deepseek-v4-pro', 'deepseek-v3.2'],
+    models: [
+      { id: 'deepseek-v4-flash', name: 'DeepSeek V4 Flash', context: 128000 },
+      { id: 'deepseek-v4-pro', name: 'DeepSeek V4 Pro', context: 128000 },
+      { id: 'deepseek-r1', name: 'DeepSeek R1', context: 128000 },
+      { id: 'deepseek-v3.2', name: 'DeepSeek V3.2', context: 128000 },
+    ],
     docs: 'https://platform.deepseek.com',
-  },
-  minimax: {
-    name: 'MiniMax',
-    baseUrl: 'https://api.minimaxi.com/v1',
-    defaultModel: 'MiniMax-M3-Pro',
-    envKey: 'MINIMAX_API_KEY',
-    models: ['MiniMax-M3-Pro', 'MiniMax-M3', 'MiniMax-M2', 'MiniMax-Text-01'],
-    docs: 'https://api.minimaxi.com',
+    protocol: 'openai',
   },
   openai: {
     name: 'OpenAI',
     baseUrl: 'https://api.openai.com/v1',
     defaultModel: 'gpt-4o',
     envKey: 'OPENAI_API_KEY',
-    models: ['gpt-4.1', 'gpt-4o', 'gpt-4o-mini', 'gpt-4-turbo', 'gpt-3.5-turbo', 'o1-mini'],
+    models: [
+      { id: 'gpt-4.1', name: 'GPT-4.1', context: 128000 },
+      { id: 'gpt-4.1-mini', name: 'GPT-4.1 Mini', context: 128000 },
+      { id: 'gpt-4.1-nano', name: 'GPT-4.1 Nano', context: 128000 },
+      { id: 'gpt-4o', name: 'GPT-4o', context: 128000 },
+      { id: 'gpt-4o-mini', name: 'GPT-4o Mini', context: 128000 },
+      { id: 'gpt-4-turbo', name: 'GPT-4 Turbo', context: 128000 },
+      { id: 'gpt-3.5-turbo', name: 'GPT-3.5 Turbo', context: 16000 },
+      { id: 'o1-mini', name: 'o1-mini', context: 128000 },
+      { id: 'o1-preview', name: 'o1-preview', context: 128000 },
+    ],
     docs: 'https://platform.openai.com',
+    protocol: 'openai',
   },
   anthropic: {
     name: 'Anthropic Claude',
     baseUrl: 'https://api.anthropic.com/v1',
     defaultModel: 'claude-sonnet-4-20250514',
     envKey: 'ANTHROPIC_API_KEY',
-    models: ['claude-sonnet-4-20250514', 'claude-opus-4-20250514', 'claude-3-5-sonnet-20241022', 'claude-3-5-haiku-20241022'],
+    models: [
+      { id: 'claude-sonnet-4-20250514', name: 'Claude Sonnet 4', context: 200000 },
+      { id: 'claude-opus-4-20250514', name: 'Claude Opus 4', context: 200000 },
+      { id: 'claude-3-5-sonnet-20241022', name: 'Claude 3.5 Sonnet', context: 200000 },
+      { id: 'claude-3-5-haiku-20241022', name: 'Claude 3.5 Haiku', context: 200000 },
+      { id: 'claude-3-haiku-20240307', name: 'Claude 3 Haiku', context: 200000 },
+    ],
     docs: 'https://console.anthropic.com',
-    useAnthropicFormat: true,
+    protocol: 'anthropic',
   },
   google: {
     name: 'Google Gemini',
     baseUrl: 'https://generativelanguage.googleapis.com/v1beta',
     defaultModel: 'gemini-2.5-flash',
     envKey: 'GOOGLE_API_KEY',
-    models: ['gemini-2.5-pro', 'gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-pro'],
+    models: [
+      { id: 'gemini-2.5-pro', name: 'Gemini 2.5 Pro', context: 1000000 },
+      { id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash', context: 1000000 },
+      { id: 'gemini-2.0-flash', name: 'Gemini 2.0 Flash', context: 1000000 },
+      { id: 'gemini-2.0-flash-lite', name: 'Gemini 2.0 Flash Lite', context: 1000000 },
+      { id: 'gemini-1.5-pro', name: 'Gemini 1.5 Pro', context: 1000000 },
+      { id: 'gemini-1.5-flash', name: 'Gemini 1.5 Flash', context: 1000000 },
+    ],
     docs: 'https://aistudio.google.com',
-    useGoogleFormat: true,
+    protocol: 'gemini',
   },
   qwen: {
     name: '阿里通义千问',
     baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
     defaultModel: 'qwen-max-latest',
     envKey: 'QWEN_API_KEY',
-    models: ['qwen-max-latest', 'qwen-plus-latest', 'qwen-turbo-latest', 'qwen-long-latest'],
+    models: [
+      { id: 'qwen-max-latest', name: 'Qwen Max', context: 32000 },
+      { id: 'qwen-plus-latest', name: 'Qwen Plus', context: 128000 },
+      { id: 'qwen-turbo-latest', name: 'Qwen Turbo', context: 128000 },
+      { id: 'qwen-long-latest', name: 'Qwen Long', context: 1000000 },
+      { id: 'qwen-vl-max', name: 'Qwen VL Max (视觉)', context: 32000 },
+    ],
     docs: 'https://dashscope.console.aliyun.com',
+    protocol: 'openai',
   },
   zhipu: {
     name: '智谱 GLM',
     baseUrl: 'https://open.bigmodel.cn/api/paas/v4',
     defaultModel: 'glm-4-plus',
     envKey: 'ZHIPU_API_KEY',
-    models: ['glm-4-plus', 'glm-4-air', 'glm-4-flash', 'glm-4-plus-0115'],
+    models: [
+      { id: 'glm-4-plus', name: 'GLM-4 Plus', context: 128000 },
+      { id: 'glm-4-air', name: 'GLM-4 Air', context: 128000 },
+      { id: 'glm-4-flash', name: 'GLM-4 Flash', context: 128000 },
+    ],
     docs: 'https://open.bigmodel.cn',
+    protocol: 'openai',
   },
   doubao: {
     name: '字节豆包',
     baseUrl: 'https://ark.cn-beijing.volces.com/api/v3',
     defaultModel: 'doubao-pro-32k',
     envKey: 'DOUBAO_API_KEY',
-    models: ['doubao-pro-32k', 'doubao-pro-256k', 'doubao-lite-256k', 'doubao-lite-128k'],
+    models: [
+      { id: 'doubao-pro-32k', name: '豆包 Pro 32K', context: 32000 },
+      { id: 'doubao-pro-256k', name: '豆包 Pro 256K', context: 256000 },
+      { id: 'doubao-lite-256k', name: '豆包 Lite 256K', context: 256000 },
+      { id: 'doubao-lite-128k', name: '豆包 Lite 128K', context: 128000 },
+      { id: 'doubao-vision-pro', name: '豆包 Vision Pro', context: 32000 },
+    ],
     docs: 'https://www.volcengine.com/product/doubao',
+    protocol: 'openai',
   },
   kimi: {
     name: '月之暗面 Kimi',
     baseUrl: 'https://api.moonshot.cn/v1',
-    defaultModel: 'moonshot-v1-128k',
+    defaultModel: 'kimi-k2-turbo',
     envKey: 'KIMI_API_KEY',
-    models: ['moonshot-v1-8k', 'moonshot-v1-32k', 'moonshot-v1-128k', 'kimi-k2-turbo'],
+    models: [
+      { id: 'kimi-k2-turbo', name: 'Kimi K2 Turbo', context: 128000 },
+      { id: 'kimi-k2', name: 'Kimi K2', context: 128000 },
+      { id: 'moonshot-v1-128k', name: 'Moonshot V1 128K', context: 128000 },
+      { id: 'moonshot-v1-32k', name: 'Moonshot V1 32K', context: 32000 },
+      { id: 'moonshot-v1-8k', name: 'Moonshot V1 8K', context: 8000 },
+    ],
     docs: 'https://platform.moonshot.cn',
+    protocol: 'openai',
   },
-  moonshot: {
-    name: 'Moonshot',
-    baseUrl: 'https://api.moonshot.cn/v1',
-    defaultModel: 'moonshot-v1-128k',
-    envKey: 'MOONSHOT_API_KEY',
-    models: ['moonshot-v1-8k', 'moonshot-v1-32k', 'moonshot-v1-128k', 'kimi-k2-turbo'],
-    docs: 'https://platform.moonshot.cn',
-  },
-  // ========== 新增提供商 ==========
   xai: {
     name: 'xAI Grok',
     baseUrl: 'https://api.x.ai/v1',
     defaultModel: 'grok-3-mini',
     envKey: 'XAI_API_KEY',
-    models: ['grok-3-mini', 'grok-3', 'grok-2'],
+    models: [
+      { id: 'grok-3-mini', name: 'Grok 3 Mini', context: 128000 },
+      { id: 'grok-3', name: 'Grok 3', context: 128000 },
+      { id: 'grok-2', name: 'Grok 2', context: 128000 },
+    ],
     docs: 'https://x.ai/api',
+    protocol: 'openai',
   },
   minimodel: {
     name: '面壁智能 MiniCPM',
     baseUrl: 'https://api.modelbest.cn/v1',
     defaultModel: 'minicpm-m3-pro',
     envKey: 'MINIMODEL_API_KEY',
-    models: ['minicpm-m3-pro', 'minicpm-m2.6', 'minicpm-m2.5'],
+    models: [
+      { id: 'minicpm-m3-pro', name: 'MiniCPM M3 Pro', context: 32000 },
+      { id: 'minicpm-m2.6', name: 'MiniCPM M2.6', context: 32000 },
+      { id: 'minicpm-m2.5', name: 'MiniCPM M2.5', context: 32000 },
+    ],
     docs: 'https://modelbest.cn',
+    protocol: 'openai',
   },
   yi: {
     name: '零一万物 Yi',
     baseUrl: 'https://api.lingyiwanwu.com/v1',
     defaultModel: 'yi-lightning',
     envKey: 'YI_API_KEY',
-    models: ['yi-lightning', 'yi-large', 'yi-medium'],
+    models: [
+      { id: 'yi-lightning', name: 'Yi Lightning', context: 128000 },
+      { id: 'yi-large', name: 'Yi Large', context: 128000 },
+      { id: 'yi-medium', name: 'Yi Medium', context: 32000 },
+    ],
     docs: 'https://platform.lingyiwanwu.com',
+    protocol: 'openai',
   },
   together: {
     name: 'Together AI',
     baseUrl: 'https://api.together.xyz/v1',
     defaultModel: 'meta-llama/Llama-3.3-70B-Instruct-Turbo',
     envKey: 'TOGETHER_API_KEY',
-    models: ['meta-llama/Llama-3.3-70B-Instruct-Turbo', 'Qwen/Qwen2.5-72B-Instruct'],
+    models: [
+      { id: 'meta-llama/Llama-3.3-70B-Instruct-Turbo', name: 'Llama 3.3 70B', context: 128000 },
+      { id: 'Qwen/Qwen2.5-72B-Instruct', name: 'Qwen 2.5 72B', context: 128000 },
+      { id: 'deepseek-ai/DeepSeek-V4', name: 'DeepSeek V4', context: 128000 },
+    ],
     docs: 'https://together.ai',
+    protocol: 'openai',
   },
-  // ========== 原有国产大模型 ==========
   stepfun: {
     name: '阶跃星辰',
     baseUrl: 'https://api.stepfun.com/v1',
     defaultModel: 'step-3-512k',
     envKey: 'STEPFUN_API_KEY',
-    models: ['step-3-512k', 'step-1.5-32k', 'step-1.5-256k'],
+    models: [
+      { id: 'step-3-512k', name: 'Step 3 512K', context: 512000 },
+      { id: 'step-2-ultra', name: 'Step 2 Ultra', context: 256000 },
+      { id: 'step-1o', name: 'Step 1o', context: 128000 },
+      { id: 'step-1.5-32k', name: 'Step 1.5 32K', context: 32000 },
+    ],
     docs: 'https://platform.stepfun.com',
-  },
-  mimor: {
-    name: '小米 Mimo',
-    baseUrl: 'https://api.mimor.ai/v1',
-    defaultModel: 'mimo-v2',
-    envKey: 'MIMOR_API_KEY',
-    models: ['mimo-v2', 'mimo-v1-32k'],
-    docs: 'https://platform.mimor.ai',
-  },
-  kling: {
-    name: '快手可灵/万擎',
-    baseUrl: 'https://api.klingai.com/v1',
-    defaultModel: 'kling-vanchin-deepseek',
-    envKey: 'KLING_API_KEY',
-    models: ['kling-vanchin-deepseek', 'kling-vanchin-pro'],
-    docs: 'https://platform.klingai.com',
+    protocol: 'openai',
   },
   hunyuan: {
     name: '腾讯混元',
     baseUrl: 'https://api.hunyuan.tencent.com/v1',
     defaultModel: 'hy-4.0-pro',
     envKey: 'HUNYUAN_API_KEY',
-    models: ['hy-4.0-pro', 'hy-3.0-pro', 'hy-3.0-flash'],
+    models: [
+      { id: 'hy-4.0-pro', name: '混元 4.0 Pro', context: 128000 },
+      { id: 'hy-3.0-pro', name: '混元 3.0 Pro', context: 128000 },
+      { id: 'hy-3.0-flash', name: '混元 3.0 Flash', context: 128000 },
+    ],
     docs: 'https://cloud.tencent.com/product/hunyuan',
-  },
-  pangu: {
-    name: '华为盘古',
-    baseUrl: 'https://api.pangu.huawei.com/v1',
-    defaultModel: 'pangu-ultra',
-    envKey: 'PANGU_API_KEY',
-    models: ['pangu-ultra', 'pangu-pro', 'pangu-standard'],
-    docs: 'https://www.huaweicloud.com/product/pangu.html',
-  },
-  sensenova: {
-    name: '商汤日日新',
-    baseUrl: 'https://api.sensenova.com/v1',
-    defaultModel: 'sensenova-nova-pro',
-    envKey: 'SENSENOVA_API_KEY',
-    models: ['sensenova-nova-pro', 'sensenova-nova-flash'],
-    docs: 'https://platform.sensenova.com',
+    protocol: 'openai',
   },
   iflytek: {
     name: '讯飞星火',
     baseUrl: 'https://api.iflytek.com/v1',
     defaultModel: 'spark-4.0-ultra',
     envKey: 'IFLYTEK_API_KEY',
-    models: ['spark-4.0-ultra', 'spark-4.0-pro', 'spark-4.0-flash'],
+    models: [
+      { id: 'spark-4.0-ultra', name: 'Spark 4.0 Ultra', context: 128000 },
+      { id: 'spark-4.0-pro', name: 'Spark 4.0 Pro', context: 128000 },
+      { id: 'spark-4.0-flash', name: 'Spark 4.0 Flash', context: 128000 },
+    ],
     docs: 'https://www.xfyun.cn/doc/spark',
+    protocol: 'openai',
   },
-  ernie: {
-    name: '百度文心一言',
-    baseUrl: 'https://aip.baidubce.com/rpc/2.0/ai_custom/v1/wenxinworkshop/chat',
-    defaultModel: 'ernie-4.0-turbo',
-    envKey: 'ERNIE_API_KEY',
-    models: ['ernie-4.0-turbo', 'ernie-4.0', 'ernie-3.5', 'ernie-speed'],
-    docs: 'https://cloud.baidu.com/product/wenxinworkshop',
-    useBaiduFormat: true,
-  },
-
-  // ========== 海外特色提供商 ==========
   groq: {
     name: 'Groq',
     baseUrl: 'https://api.groq.com/openai/v1',
     defaultModel: 'llama-3.3-70b-specdec',
     envKey: 'GROQ_API_KEY',
-    models: ['llama-3.3-70b-specdec', 'llama-3.1-70b', 'mixtral-8x7b', 'gemma2-9b'],
+    models: [
+      { id: 'llama-3.3-70b-specdec', name: 'Llama 3.3 70B SpecDec', context: 8192 },
+      { id: 'llama-3.1-70b', name: 'Llama 3.1 70B', context: 8192 },
+      { id: 'llama-3.1-8b', name: 'Llama 3.1 8B', context: 8192 },
+      { id: 'mixtral-8x7b', name: 'Mixtral 8x7B', context: 32000 },
+      { id: 'gemma2-9b', name: 'Gemma 2 9B', context: 8192 },
+    ],
     docs: 'https://console.groq.com',
+    protocol: 'openai',
   },
-
-  // ========== 聚合/中转平台 ==========
   openrouter: {
     name: 'OpenRouter',
     baseUrl: 'https://openrouter.ai/api/v1',
     defaultModel: 'deepseek/deepseek-chat',
     envKey: 'OPENROUTER_API_KEY',
-    models: ['deepseek/deepseek-chat', 'openai/gpt-4o', 'anthropic/claude-3.5-sonnet', 'google/gemini-pro'],
+    models: [
+      { id: 'deepseek/deepseek-chat', name: 'DeepSeek Chat', context: 128000 },
+      { id: 'openai/gpt-4o', name: 'GPT-4o', context: 128000 },
+      { id: 'anthropic/claude-3.5-sonnet', name: 'Claude 3.5 Sonnet', context: 200000 },
+      { id: 'google/gemini-pro', name: 'Gemini Pro', context: 1000000 },
+    ],
     docs: 'https://openrouter.ai/docs',
-    useOpenRouterFormat: true,
+    protocol: 'openai',
   },
   siliconflow: {
     name: '硅基流动',
     baseUrl: 'https://api.siliconflow.cn/v1',
     defaultModel: 'deepseek-ai/DeepSeek-V4',
     envKey: 'SILICONFLOW_API_KEY',
-    models: ['deepseek-ai/DeepSeek-V4', 'Qwen/Qwen2.5-72B', 'google/gemma-2-27b'],
+    models: [
+      { id: 'deepseek-ai/DeepSeek-V4', name: 'DeepSeek V4', context: 128000 },
+      { id: 'Qwen/Qwen2.5-72B', name: 'Qwen 2.5 72B', context: 128000 },
+      { id: 'google/gemma-2-27b', name: 'Gemma 2 27B', context: 8000 },
+    ],
     docs: 'https://docs.siliconflow.cn',
-  },
-  tokenhub: {
-    name: 'TokenHub',
-    baseUrl: 'https://api.tokenhub.com/v1',
-    defaultModel: 'hy3',
-    envKey: 'TOKENHUB_API_KEY',
-    models: ['hy3', 'deepseek-chat', 'glm-4-plus', 'moonshot-v1'],
-    docs: 'https://tokenhub.com/docs',
+    protocol: 'openai',
   },
   alibabacloud: {
     name: '阿里云百炼',
     baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
     defaultModel: 'qwen-plus',
     envKey: 'ALIBABACLOUD_API_KEY',
-    models: ['qwen-plus', 'qwen-turbo', 'deepseek-r1', 'kimi-moonshot'],
+    models: [
+      { id: 'qwen-plus', name: 'Qwen Plus', context: 128000 },
+      { id: 'qwen-turbo', name: 'Qwen Turbo', context: 128000 },
+      { id: 'deepseek-r1', name: 'DeepSeek R1', context: 128000 },
+      { id: 'kimi-moonshot', name: 'Kimi Moonshot', context: 128000 },
+    ],
     docs: 'https://help.aliyun.com/product/2712598.html',
+    protocol: 'openai',
   },
-  // ========== 自定义（保留） ==========
   custom: {
     name: '自定义 OpenAI 兼容',
     baseUrl: '',
@@ -293,40 +292,40 @@ const PROVIDERS = {
     envKey: 'CUSTOM_API_KEY',
     models: [],
     docs: '任何兼容 OpenAI Chat Completions 的服务',
+    protocol: 'openai',
   },
 };
 
-// ─────────────────────────────────────────────
-//  配置加载：智能识别 API Key（带模块级缓存）
-// ─────────────────────────────────────────────
 let _cachedConfig = null;
 
 function loadConfig() {
   if (_cachedConfig) return _cachedConfig;
-
+  
   const providerKey = (process.env.AI_PROVIDER || 'deepseek').toLowerCase();
   const provider = PROVIDERS[providerKey];
-
+  
   if (!provider) {
     throw new Error(
-      `❌ 不支持的 AI 提供商: "${providerKey}"\n` +
+      `❌ 不支持的 AI 提供商: "${providerKey}"
+` +
       `支持: ${Object.keys(PROVIDERS).join(', ')}`
     );
   }
-
-  // 1. 优先用 AI_API_KEY（通用），没有则用提供商专用 env
+  
   const apiKey = process.env.AI_API_KEY
                  || process.env[provider.envKey]
                  || process.env[providerKey.toUpperCase() + '_API_KEY'];
-
+  
   if (!apiKey) {
     throw new Error(
-      `❌ 未配置 API Key。\n` +
-      `请在 .env / GitHub Secrets 设置 AI_API_KEY 或 ${provider.envKey}\n` +
+      `❌ 未配置 API Key。
+` +
+      `请在 .env / GitHub Secrets 设置 AI_API_KEY 或 ${provider.envKey}
+` +
       `获取: ${provider.docs}`
     );
   }
-
+  
   return _cachedConfig = {
     provider: providerKey,
     providerName: provider.name,
@@ -336,19 +335,14 @@ function loadConfig() {
     timeout: parseInt(process.env.AI_TIMEOUT) || 60000,
     maxTokens: parseInt(process.env.AI_MAX_TOKENS) || 4096,
     temperature: parseFloat(process.env.AI_TEMP) || 0.7,
-    useAnthropicFormat: provider.useAnthropicFormat,
-    useGoogleFormat: provider.useGoogleFormat,
+    protocol: provider.protocol,
   };
 }
 
-// ─────────────────────────────────────────────
-//  HTTP 请求（不依赖第三方库）
-// ─────────────────────────────────────────────
 function httpRequest(url, options, body) {
   return new Promise((resolve, reject) => {
     const parsed = new URL(url);
     const lib = parsed.protocol === 'http:' ? http : https;
-
     const req = lib.request({
       hostname: parsed.hostname,
       port: parsed.port || (parsed.protocol === 'http:' ? 80 : 443),
@@ -369,99 +363,99 @@ function httpRequest(url, options, body) {
         }
       });
     });
-
+    
     req.on('error', reject);
     req.on('timeout', () => { req.destroy(); reject(new Error('请求超时')); });
-
     if (body) req.write(typeof body === 'string' ? body : JSON.stringify(body));
     req.end();
   });
 }
 
-// ─────────────────────────────────────────────
-//  核心：对话接口
-// ─────────────────────────────────────────────
 async function chat(messages, options = {}) {
   const cfg = loadConfig();
   const model = options.model || cfg.model;
   const maxTokens = options.maxTokens || cfg.maxTokens;
   const temperature = options.temperature !== undefined ? options.temperature : cfg.temperature;
   const timeout = options.timeout || cfg.timeout;
-
+  
   let url, body, headers;
-
-  if (cfg.useAnthropicFormat) {
-    // Anthropic 协议
-    const systemMsg = messages.find(m => m.role === 'system');
-    const userMsgs = messages.filter(m => m.role !== 'system');
-    url = `${cfg.baseUrl}/messages`;
-    headers = {
-      'Content-Type': 'application/json',
-      'x-api-key': cfg.apiKey,
-      'anthropic-version': '2023-06-01',
-    };
-    body = {
-      model,
-      max_tokens: maxTokens,
-      temperature,
-      system: systemMsg ? systemMsg.content : '',
-      messages: userMsgs,
-    };
-  } else if (cfg.useGoogleFormat) {
-    // Google Gemini 协议
-    const contents = messages
-      .filter(m => m.role !== 'system')
-      .map(m => ({
-        role: m.role === 'assistant' ? 'model' : 'user',
-        parts: [{ text: m.content }],
-      }));
-    url = `${cfg.baseUrl}/models/${model}:generateContent?key=${cfg.apiKey}`;
-    headers = { 'Content-Type': 'application/json' };
-    body = {
-      contents,
-      generationConfig: {
-        maxOutputTokens: maxTokens,
+  
+  switch (cfg.protocol) {
+    case 'anthropic': {
+      const systemMsg = messages.find(m => m.role === 'system');
+      const userMsgs = messages.filter(m => m.role !== 'system');
+      url = `${cfg.baseUrl}/messages`;
+      headers = {
+        'Content-Type': 'application/json',
+        'x-api-key': cfg.apiKey,
+        'anthropic-version': '2023-06-01',
+      };
+      body = {
+        model,
+        max_tokens: maxTokens,
         temperature,
-      },
-    };
-  } else {
-    // OpenAI 兼容协议（DeepSeek/MiniMax/OpenAI/通义/智谱/豆包/Kimi/Moonshot/Custom）
-    url = `${cfg.baseUrl}/chat/completions`;
-    headers = {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${cfg.apiKey}`,
-    };
-    body = {
-      model,
-      messages,
-      max_tokens: maxTokens,
-      temperature,
-      stream: false,
-    };
+        system: systemMsg ? systemMsg.content : '',
+        messages: userMsgs,
+      };
+      break;
+    }
+    case 'gemini': {
+      const systemMsg = messages.find(m => m.role === 'system');
+      const contents = messages
+        .filter(m => m.role !== 'system')
+        .map(m => ({
+          role: m.role === 'assistant' ? 'model' : 'user',
+          parts: [{ text: m.content }],
+        }));
+      url = `${cfg.baseUrl}/models/${model}:generateContent?key=${cfg.apiKey}`;
+      headers = { 'Content-Type': 'application/json' };
+      body = {
+        contents,
+        generationConfig: {
+          maxOutputTokens: maxTokens,
+          temperature,
+        },
+      };
+      if (systemMsg) {
+        body.systemInstruction = { parts: [{ text: systemMsg.content }] };
+      }
+      break;
+    }
+    default: {
+      url = `${cfg.baseUrl}/chat/completions`;
+      headers = {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${cfg.apiKey}`,
+      };
+      body = {
+        model,
+        messages,
+        max_tokens: maxTokens,
+        temperature,
+        stream: false,
+      };
+      break;
+    }
   }
-
+  
   try {
     const res = await httpRequest(url, { method: 'POST', headers, timeout }, body);
-
-    // 统一解析不同格式
-    if (cfg.useAnthropicFormat) {
-      return res.content?.[0]?.text || '';
-    } else if (cfg.useGoogleFormat) {
-      return res.candidates?.[0]?.content?.parts?.[0]?.text || '';
-    } else {
-      return res.choices?.[0]?.message?.content || '';
+    
+    switch (cfg.protocol) {
+      case 'anthropic':
+        return res.content?.[0]?.text || '';
+      case 'gemini':
+        return res.candidates?.[0]?.content?.parts?.[0]?.text || '';
+      default:
+        return res.choices?.[0]?.message?.content || '';
     }
   } catch (err) {
     throw new Error(`[${cfg.providerName}/${model}] 调用失败: ${err.message}`);
   }
 }
 
-// ─────────────────────────────────────────────
-//  JSON 模式：让 AI 返回结构化数据
-// ─────────────────────────────────────────────
 async function chatJSON(messages, options = {}) {
   const cfg = loadConfig();
-  // 修复：去掉最后一条原始消息，避免重复发送
   const lastMsg = messages[messages.length - 1];
   const enhanced = [
     ...messages.slice(0, -1),
@@ -471,13 +465,10 @@ async function chatJSON(messages, options = {}) {
                '\n\n【严格规则】只返回合法 JSON，不要任何解释、不要 markdown 代码块标记。'
     }
   ];
-
   const text = await chat(enhanced, options);
-  // 修复：同时匹配 {} 和 [] 格式的 JSON
   const jsonMatch = text.match(/\{[\s\S]*\}/) || text.match(/\[[\s\S]*\]/);
   if (jsonMatch) {
-    try { return JSON.parse(jsonMatch[0]); }
-    catch (e) { /* fall through */ }
+    try { return JSON.parse(jsonMatch[0]); } catch (e) { /* fall through */ }
   }
   try { return JSON.parse(text); }
   catch (e) {
@@ -485,9 +476,55 @@ async function chatJSON(messages, options = {}) {
   }
 }
 
-// ─────────────────────────────────────────────
-//  工具方法
-// ─────────────────────────────────────────────
+async function listModels(providerKey = null) {
+  if (providerKey) {
+    const provider = PROVIDERS[providerKey.toLowerCase()];
+    if (!provider) throw new Error(`未知的提供商: ${providerKey}`);
+    return provider.models || [];
+  }
+  
+  const currentCfg = loadConfig();
+  const currentProvider = PROVIDERS[currentCfg.provider];
+  
+  // 尝试动态获取
+  try {
+    switch (currentCfg.protocol) {
+      case 'openai': {
+        const url = `${currentCfg.baseUrl}/models`;
+        const res = await httpRequest(url, { method: 'GET', headers: {
+          'Authorization': `Bearer ${currentCfg.apiKey}`,
+        }}, null);
+        
+        if (res.data && Array.isArray(res.data)) {
+          return res.data.map(m => ({
+            id: m.id,
+            name: m.id,
+            context: m.context_length || m.max_tokens || 0,
+          }));
+        }
+        break;
+      }
+      case 'gemini': {
+        const url = `${currentCfg.baseUrl}/models?key=${currentCfg.apiKey}`;
+        const res = await httpRequest(url, { method: 'GET' }, null);
+        
+        if (res.models && Array.isArray(res.models)) {
+          return res.models.map(m => ({
+            id: m.name?.replace('models/', '') || m.name,
+            name: m.displayName || m.name,
+            context: m.inputTokenLimit || 0,
+          }));
+        }
+        break;
+      }
+    }
+  } catch (e) {
+    console.warn(`动态获取模型列表失败: ${e.message}`);
+  }
+  
+  return currentProvider?.models || [];
+}
+
 function listProviders() {
   return Object.entries(PROVIDERS).map(([k, v]) => ({
     key: k,
@@ -496,14 +533,12 @@ function listProviders() {
     defaultModel: v.defaultModel,
     models: v.models,
     docs: v.docs,
+    protocol: v.protocol,
   }));
 }
 
 function getConfig() { return loadConfig(); }
 
-// ─────────────────────────────────────────────
-//  CLI 测试入口
-// ─────────────────────────────────────────────
 if (require.main === module) {
   const args = process.argv.slice(2);
   if (args[0] === '--list') {
@@ -521,6 +556,13 @@ if (require.main === module) {
   } else if (args[0] === '--config') {
     const c = loadConfig();
     console.log(JSON.stringify(c, null, 2));
+  } else if (args[0] === '--models') {
+    listModels(args[1]).then(models => {
+      console.log(JSON.stringify(models, null, 2));
+    }).catch(e => {
+      console.error('❌', e.message);
+      process.exit(1);
+    });
   } else {
     console.log(`
 ai-provider.js — 统一 AI 模型调用
@@ -529,8 +571,9 @@ ai-provider.js — 统一 AI 模型调用
   node ai-provider.js --list                    # 列出所有支持的提供商
   node ai-provider.js --test "你的问题"          # 测试当前配置的 AI
   node ai-provider.js --config                  # 查看当前配置
+  node ai-provider.js --models [provider]        # 获取模型列表
 `);
   }
 }
 
-module.exports = { chat, chatJSON, listProviders, getConfig, PROVIDERS };
+module.exports = { chat, chatJSON, listModels, listProviders, getConfig, PROVIDERS };
