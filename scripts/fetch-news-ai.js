@@ -112,11 +112,25 @@ const SECTION_KEYWORDS = {
   space: ['科学','物理','天文','航天','火箭','SpaceX','NASA','卫星','月球','火星','量子','粒子','对撞机','望远镜','医疗','健康','药品','疫苗','医院','疾病','医保','基因','生物医药','抗癌','罕见病','脑机接口'],
 };
 
+function getStore() {
+  try { return require('./config-store'); } catch (e) { return null; }
+}
+
 function getEnabledSections() {
+  // 优先级: 环境变量 > 配置文件 sections.enabled > 全部
   const filter = process.env.ENABLED_SECTIONS;
-  if (!filter) return ALL_SECTIONS;
-  const keys = new Set(filter.split(',').map(s => s.trim()));
-  return ALL_SECTIONS.filter(s => keys.has(s.key));
+  if (filter) {
+    const keys = new Set(filter.split(',').map(function (s) { return s.trim(); }));
+    return ALL_SECTIONS.filter(function (s) { return keys.has(s.key); });
+  }
+  const store = getStore();
+  const fromFile = store && store.get('sections.enabled');
+  if (Array.isArray(fromFile) && fromFile.length) {
+    const keys = new Set(fromFile);
+    const picked = ALL_SECTIONS.filter(function (s) { return keys.has(s.key); });
+    if (picked.length) return picked;
+  }
+  return ALL_SECTIONS;
 }
 
 // ─────────────────────────────────────────────
@@ -686,20 +700,22 @@ ${contextText}
 //  天气
 // ─────────────────────────────────────────────
 async function fetchWeather() {
-  const lat = process.env.WEATHER_LAT || '28.20';
-  const lon = process.env.WEATHER_LON || '112.97';
+  const store = getStore();
+  const wCfg = (store && store.get('weather')) || {};
+  const lat = process.env.WEATHER_LAT || wCfg.lat || '28.20';
+  const lon = process.env.WEATHER_LON || wCfg.lon || '112.97';
+  const city = process.env.WEATHER_CITY || wCfg.city || '湖南长沙';
   try {
     const controller = new AbortController();
     const to = setTimeout(() => controller.abort(), 6000);
-    const res = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current_weather=true&timezone=auto`, { signal: controller.signal });
+    const res = await fetch('https://api.open-meteo.com/v1/forecast?latitude=' + lat + '&longitude=' + lon + '&current_weather=true&timezone=auto', { signal: controller.signal });
     clearTimeout(to);
     const data = await res.json();
     const w = data.current_weather || {};
-    const map = {0:'☀️ 晴朗',1:'🌤 少云',2:'⛅ 多云',3:'☁️ 阴天',45:'🌫 雾',48:'🌫 雾凇',51:'🌦 小雨',53:'🌦 中雨',55:'🌦 大雨',61:'🌧 雨',63:'🌧 中雨',65:'🌧 大雨',71:'🌨 小雪',73:'🌨 中雪',75:'🌨 大雪',80:'🌦 阵雨',81:'🌦 强阵雨',82:'⛈ 强阵雨',95:'⛈ 雷暴',96:'⛈ 雷暴冰雹',99:'⛈ 强雷暴'};
-    const city = process.env.WEATHER_CITY || '湖南长沙';
-    return { location: city, text: map[w.weathercode] || '☁️ 多云', temp: `${Math.round(w.temperature)}°C` };
+    const map = {0:'晴朗',1:'少云',2:'多云',3:'阴天',45:'雾',48:'雾凇',51:'小雨',53:'中雨',55:'大雨',61:'雨',63:'中雨',65:'大雨',71:'小雪',73:'中雪',75:'大雪',80:'阵雨',81:'强阵雨',82:'强阵雨',95:'雷暴',96:'雷暴冰雹',99:'强雷暴'};
+    return { location: city, text: map[w.weathercode] || '多云', temp: Math.round(w.temperature) + '°C' };
   } catch (e) {
-    return { location: process.env.WEATHER_CITY || '湖南长沙', text: '☁️ 多云', temp: '26°C' };
+    return { location: city, text: '多云', temp: '26°C' };
   }
 }
 
