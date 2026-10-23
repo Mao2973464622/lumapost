@@ -253,82 +253,90 @@ const PROVIDERS = {
 };
 
 // ─────────────────────────────────────────────
-//  配置加载（带模块级缓存）
+//  配置加载（配置文件优先，环境变量兜底）
 // ─────────────────────────────────────────────
-let _cachedMailConfig = null;
+let _configStore = null;
+function getStore() {
+  if (_configStore === null) {
+    try { _configStore = require('./config-store'); } catch (e) { _configStore = false; }
+  }
+  return _configStore || null;
+}
 
 function loadConfig() {
-  if (_cachedMailConfig) return _cachedMailConfig;
+  const store = getStore();
+  const fileCfg = store ? store.getAll() : {};
+  const mailCfg = fileCfg.mail || {};
 
-  const providerKey = (process.env.MAIL_PROVIDER || 'qq').toLowerCase();
+  const providerKey = String(
+    process.env.MAIL_PROVIDER || mailCfg.provider || 'qq'
+  ).toLowerCase();
   const provider = PROVIDERS[providerKey];
 
   if (!provider) {
     throw new Error(
-      `❌ 不支持的邮件提供商: "${providerKey}"\n` +
-      `支持: ${Object.keys(PROVIDERS).join(', ')}`
+      '不支持的邮件提供商: "' + providerKey + '"\n支持: ' + Object.keys(PROVIDERS).join(', ')
     );
   }
 
-// 1. 优先用通用变量
-  let user = process.env.MAIL_USER
-               || process.env.EMAIL_FROM
-               || (provider.envUser ? process.env[provider.envUser] : null);
+  let user = mailCfg.user
+    || process.env.MAIL_USER
+    || process.env.EMAIL_FROM
+    || (provider.envUser ? process.env[provider.envUser] : null);
 
-  const pass = process.env.MAIL_PASS
-               || process.env.MAIL_API_KEY
-               || process.env.EMAIL_PASS
-               || (provider.envPass ? process.env[provider.envPass] : null);
-  // 特殊处理 Mailjet（user=API Key, pass=Secret Key）
+  const pass = mailCfg.pass
+    || process.env.MAIL_PASS
+    || process.env.MAIL_API_KEY
+    || process.env.EMAIL_PASS
+    || (provider.envPass ? process.env[provider.envPass] : null);
+
   if (providerKey === 'mailjet') {
-    user = process.env.MAILJET_USER || process.env.MAIL_USER || process.env.MAIL_API_KEY;
+    user = mailCfg.user || process.env.MAILJET_USER || process.env.MAIL_USER || process.env.MAIL_API_KEY;
   }
+
   if (!pass) {
     throw new Error(
-      `❌ 未配置邮件凭证。\n` +
-      `请设置 MAIL_PASS 或 ${provider.envPass}\n` +
-      `${provider.note}\n` +
-      `获取: ${provider.docs}`
+      '未配置邮件凭证。请在 Web UI 配置页填写，或设置 MAIL_PASS。\n' +
+      (provider.note || '') + '\n获取: ' + provider.docs
     );
   }
   if (provider.type === 'smtp' && !user) {
-    throw new Error(
-      `❌ 未配置发件邮箱。\n` +
-      `请设置 MAIL_USER 或 ${provider.envUser}`
-    );
+    throw new Error('未配置发件邮箱。请在 Web UI 配置页填写。');
   }
 
-  // SMTP 特定配置
   const config = {
     provider: providerKey,
     providerName: provider.name,
     type: provider.type,
-    user,
-    pass,
-    from: process.env.MAIL_FROM || user || 'noreply@example.com',
-    to: process.env.MAIL_TO || user,
+    user: user,
+    pass: pass,
+    from: mailCfg.from || process.env.MAIL_FROM || user || 'noreply@example.com',
+    to: mailCfg.to || process.env.MAIL_TO || user,
   };
 
   if (provider.type === 'smtp') {
-    config.host = process.env.MAIL_SMTP_HOST || provider.host;
-    config.port = parseInt(process.env.MAIL_SMTP_PORT) || provider.port;
-    config.secure = process.env.MAIL_SMTP_SECURE !== undefined
-                    ? process.env.MAIL_SMTP_SECURE === 'true'
-                    : provider.secure;
+    config.host = mailCfg.smtpHost || process.env.MAIL_SMTP_HOST || provider.host;
+    config.port = Number(mailCfg.smtpPort) || parseInt(process.env.MAIL_SMTP_PORT) || provider.port;
+    config.secure = mailCfg.smtpSecure !== undefined
+      ? !!mailCfg.smtpSecure
+      : (process.env.MAIL_SMTP_SECURE !== undefined
+        ? process.env.MAIL_SMTP_SECURE === 'true'
+        : provider.secure);
     if (provider.requireTLS) config.requireTLS = true;
+    if (!config.host) {
+      throw new Error('邮件提供商 "' + providerKey + '" 缺少 SMTP 服务器地址。');
+    }
   } else if (provider.type === 'api') {
     let url = provider.apiUrl;
     if (provider.envDomain) {
-      const domain = process.env[provider.envDomain];
-      if (!domain) {
-        throw new Error(`❌ ${provider.name} 需要设置 ${provider.envDomain}`);
-      }
+      const domain = mailCfg.smtpHost || process.env[provider.envDomain];
+      if (!domain) throw new Error(provider.name + ' 需要设置域名 (' + provider.envDomain + ')');
       url = url.replace('{domain}', domain);
     }
     config.apiUrl = url;
   }
 
-  return _cachedMailConfig = config;
+  return config;
 }
 
 // ─────────────────────────────────────────────
