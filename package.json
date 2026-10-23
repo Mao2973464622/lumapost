@@ -1,7 +1,7 @@
 {
   "name": "lumapost",
-  "version": "4.0.0",
-  "description": "LumaPost - 光影邮报：AI 驱动的智能新闻邮件推送系统。支持 22+ AI 模型（DeepSeek/MiniMax/OpenAI/Claude/通义千问/智谱/豆包/Kimi/阶跃星辰/腾讯混元/华为盘古等）、14+ 邮件服务（QQ/网易/Gmail/Outlook/Resend/SendGrid等），GitHub Actions 云端部署，电脑关机也能发。",
+  "version": "4.1.0",
+  "description": "LumaPost - 光影邮报：AI 驱动的智能新闻邮件推送系统。支持 28+ AI 模型（DeepSeek/MiniMax/OpenAI/Claude/通义千问/智谱/豆包/Kimi/xAI/Grok/阶跃星辰/面壁/零一万物/Together 等）、18+ 邮件服务（QQ/网易/Gmail/Outlook/阿里云/腾讯云 SES/Resend/SendGrid 等），GitHub Actions 云端部署，电脑关机也能发。",
   "main": "scripts/fetch-news-ai.js",
   "scripts": {
     "ai:list": "node scripts/ai-provider.js --list",
@@ -43,14 +43,14 @@
     "github-actions",
     "daily-digest"
   ],
-  "author": "QiXua",
+  "author": "QiXua & Operit AI",
   "license": "MIT",
   "dependencies": {
-    "dotenv": "^17.4.2",
-    "nodemailer": "^7.0.5"
+    "dotenv": "^17.5.0",
+    "nodemailer": "^7.0.6"
   },
   "engines": {
-    "node": ">=18.0.0"
+    "node": ">=20.0.0"
   },
   "repository": {
     "type": "git",

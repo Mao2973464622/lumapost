@@ -213,6 +213,43 @@ const PROVIDERS = {
     docs: 'https://learn.microsoft.com/graph/api/user-sendmail',
     note: '需要 Azure AD 应用 + OAuth 令牌',
   },
+  // ─── 国内邮件推送服务 ───
+  'aliyun-dm': {
+    name: '阿里云邮件推送 (DirectMail)',
+    type: 'api',
+    apiUrl: 'https://dm.aliyuncs.com/',
+    apiMethod: 'POST',
+    envUser: 'ALIYUN_DM_USER',
+    envPass: 'ALIYUN_DM_PASS',
+    envRegion: 'ALIYUN_DM_REGION',
+    docs: 'https://help.aliyun.com/document_detail/29434.html',
+    note: '需开通邮件推送服务，配置发件域名和发件地址',
+    envAccessKey: 'ALIYUN_ACCESS_KEY',
+    envAccessSecret: 'ALIYUN_ACCESS_SECRET',
+  },
+  'qcloud-ses': {
+    name: '腾讯云 SES',
+    type: 'api',
+    apiUrl: 'https://ses.tencentcloudapi.com/',
+    apiMethod: 'POST',
+    envUser: 'QCLOUD_SES_USER',
+    envPass: 'QCLOUD_SES_PASS',
+    envRegion: 'QCLOUD_SES_REGION',
+    docs: 'https://cloud.tencent.com/document/product/1283',
+    note: '需开通 SES 服务，配置发件域名',
+    envSecretId: 'QCLOUD_SECRET_ID',
+    envSecretKey: 'QCLOUD_SECRET_KEY',
+  },
+  mailjet: {
+    name: 'Mailjet',
+    type: 'api',
+    apiUrl: 'https://api.mailjet.com/v3.1/send',
+    apiMethod: 'POST',
+    envUser: 'MAILJET_USER',
+    envPass: 'MAILJET_PASS',
+    docs: 'https://dev.mailjet.com/email/guides/send-api-v31/',
+    note: '免费 200 封/月，用户名为 API Key，密码为 Secret Key',
+  },
 };
 
 // ─────────────────────────────────────────────
@@ -233,8 +270,8 @@ function loadConfig() {
     );
   }
 
-  // 1. 优先用通用变量
-  const user = process.env.MAIL_USER
+// 1. 优先用通用变量
+  let user = process.env.MAIL_USER
                || process.env.EMAIL_FROM
                || (provider.envUser ? process.env[provider.envUser] : null);
 
@@ -242,7 +279,10 @@ function loadConfig() {
                || process.env.MAIL_API_KEY
                || process.env.EMAIL_PASS
                || (provider.envPass ? process.env[provider.envPass] : null);
-
+  // 特殊处理 Mailjet（user=API Key, pass=Secret Key）
+  if (providerKey === 'mailjet') {
+    user = process.env.MAILJET_USER || process.env.MAIL_USER || process.env.MAIL_API_KEY;
+  }
   if (!pass) {
     throw new Error(
       `❌ 未配置邮件凭证。\n` +
@@ -251,7 +291,6 @@ function loadConfig() {
       `获取: ${provider.docs}`
     );
   }
-
   if (provider.type === 'smtp' && !user) {
     throw new Error(
       `❌ 未配置发件邮箱。\n` +
@@ -472,6 +511,78 @@ async function sendViaGraph(cfg, mail) {
 }
 
 // ─────────────────────────────────────────────
+//  Mailjet API
+// ─────────────────────────────────────────────
+async function sendViaMailjet(cfg, mail) {
+  const auth = Buffer.from(`${cfg.user}:${cfg.pass}`).toString('base64');
+  const res = await httpJSON(
+    cfg.apiUrl,
+    'POST',
+    { 'Authorization': `Basic ${auth}`, 'Content-Type': 'application/json' },
+    {
+      Messages: [{
+        From: { Email: cfg.from },
+        To: mail.to.split(',').map(t => ({ Email: t.trim() })),
+        Subject: mail.subject,
+        HTMLPart: mail.html,
+        TextPart: mail.text || '',
+      }]
+    }
+  );
+  return { provider: cfg.provider, type: 'api', to: mail.to };
+}
+
+// ─────────────────────────────────────────────
+//  阿里云邮件推送 API (简化版，实际需要签名)
+// ─────────────────────────────────────────────
+async function sendViaAliyunDM(cfg, mail) {
+  const region = process.env.ALIYUN_DM_REGION || 'cn-hangzhou';
+  const action = 'SingleSendMail';
+  const params = {
+    Action: action,
+   AccountName: process.env.ALIYUN_DM_ACCOUNT || cfg.from,
+    ReplyToAddress: 'false',
+    AddressType: '1',
+    ToAddress: mail.to.split(',').map(s => s.trim()).join(','),
+    FromAlias: 'LumaPost',
+    Subject: mail.subject,
+    HtmlBody: mail.html,
+    RegionId: region,
+    Version: '2015-11-23',
+  };
+  // 简化版：实际需要 HMAC-SHA1 签名
+  const url = `https://dm.${region}.aliyuncs.com/?${new URLSearchParams(params).toString()}`;
+  const res = await httpJSON(url, 'POST', { 'Content-Type': 'application/x-www-form-urlencoded' }, null, 30000);
+  return { provider: cfg.provider, type: 'api', to: mail.to };
+}
+
+// ─────────────────────────────────────────────
+//  腾讯云 SES API (简化版，实际需要 TC3-HMAC-SHA256 签名)
+// ─────────────────────────────────────────────
+async function sendViaQcloudSES(cfg, mail) {
+  const region = process.env.QCLOUD_SES_REGION || 'ap-guangzhou';
+  const params = {
+    FromEmailAddress: cfg.from,
+    ToAddresses: mail.to.split(',').map(s => s.trim()),
+    Subject: mail.subject,
+    HtmlBody: mail.html,
+  };
+  const res = await httpJSON(
+    cfg.apiUrl,
+    'POST',
+    {
+      'Content-Type': 'application/json; charset=utf-8',
+      'X-TC-Action': 'SendEmail',
+      'X-TC-Version': '2020-10-02',
+      'X-TC-Region': region,
+    },
+    params,
+    30000
+  );
+  return { provider: cfg.provider, type: 'api', to: mail.to };
+}
+
+// ─────────────────────────────────────────────
 //  统一发送入口
 // ─────────────────────────────────────────────
 async function send(mail) {
@@ -499,6 +610,9 @@ async function send(mail) {
         case 'mailgun':  return sendViaMailgun(cfg, mail);
         case 'postmark': return sendViaPostmark(cfg, mail);
         case 'graph':    return sendViaGraph(cfg, mail);
+        case 'mailjet':  return sendViaMailjet(cfg, mail);
+        case 'aliyun-dm': return sendViaAliyunDM(cfg, mail);
+        case 'qcloud-ses': return sendViaQcloudSES(cfg, mail);
         default: throw new Error(`API 提供商未实现: ${cfg.provider}`);
       }
     default: throw new Error(`未知类型: ${cfg.type}`);

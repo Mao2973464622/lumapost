@@ -15,7 +15,10 @@
  *   - doubao         → 字节豆包
  *   - kimi           → 月之暗面 Kimi
  *   - moonshot       → Moonshot
- *   - custom         → 自定义 OpenAI 兼容协议
+ *   - xai            → xAI Grok
+ *   - minimodel      → 面壁智能 MiniCPM
+ *   - yi             → 零一万物 Yi
+ *   - together       → Together AI
  *   - stepfun        → 阶跃星辰
  *   - mimor          → 小米 Mimo
  *   - kling          → 快手可灵/万擎
@@ -29,6 +32,7 @@
  *   - siliconflow    → 硅基流动
  *   - tokenhub       → TokenHub (腾讯云聚合)
  *   - alibabacloud   → 阿里云百炼
+ *   - custom         → 自定义 OpenAI 兼容协议
  *
  * 用法（在其他脚本里）：
  *   const ai = require('./ai-provider');
@@ -46,15 +50,12 @@
  *   AI_MAX_TOKENS= 4096                 # 单次最大输出（可选）
  *   AI_TEMP      = 0.7                  # 创造性（0-1，可选）
  */
-
 const https = require('https');
 const http = require('http');
 const { URL } = require('url');
-
 try { require('dotenv').config(); } catch(e) {}
-
 // ─────────────────────────────────────────────────────────────
-//  各大提供商的预设（base URL + 默认模型）- 2026年7月最新版
+//  各大提供商的预设（base URL + 默认模型）- 2026年10月最新版
 // ─────────────────────────────────────────────────────────────
 const PROVIDERS = {
   // ========== 原有主流提供商 ==========
@@ -63,31 +64,31 @@ const PROVIDERS = {
     baseUrl: 'https://api.deepseek.com',
     defaultModel: 'deepseek-v4-flash',
     envKey: 'DEEPSEEK_API_KEY',
-    models: ['deepseek-v4-flash', 'deepseek-v4-pro'],
+    models: ['deepseek-v4-flash', 'deepseek-v4-pro', 'deepseek-v3.2'],
     docs: 'https://platform.deepseek.com',
   },
   minimax: {
     name: 'MiniMax',
     baseUrl: 'https://api.minimaxi.com/v1',
-    defaultModel: 'MiniMax-M3',
+    defaultModel: 'MiniMax-M3-Pro',
     envKey: 'MINIMAX_API_KEY',
-    models: ['MiniMax-M3', 'MiniMax-M2', 'MiniMax-Text-01'],
+    models: ['MiniMax-M3-Pro', 'MiniMax-M3', 'MiniMax-M2', 'MiniMax-Text-01'],
     docs: 'https://api.minimaxi.com',
   },
   openai: {
     name: 'OpenAI',
     baseUrl: 'https://api.openai.com/v1',
-    defaultModel: 'gpt-4o-mini',
+    defaultModel: 'gpt-4o',
     envKey: 'OPENAI_API_KEY',
-    models: ['gpt-4.1', 'gpt-4o', 'gpt-4o-mini', 'gpt-4-turbo', 'gpt-3.5-turbo'],
+    models: ['gpt-4.1', 'gpt-4o', 'gpt-4o-mini', 'gpt-4-turbo', 'gpt-3.5-turbo', 'o1-mini'],
     docs: 'https://platform.openai.com',
   },
   anthropic: {
     name: 'Anthropic Claude',
     baseUrl: 'https://api.anthropic.com/v1',
-    defaultModel: 'claude-3-7-sonnet-20250219',
+    defaultModel: 'claude-sonnet-4-20250514',
     envKey: 'ANTHROPIC_API_KEY',
-    models: ['claude-3-7-sonnet-20250219', 'claude-3-5-sonnet-20241022', 'claude-3-5-haiku-20241022'],
+    models: ['claude-sonnet-4-20250514', 'claude-opus-4-20250514', 'claude-3-5-sonnet-20241022', 'claude-3-5-haiku-20241022'],
     docs: 'https://console.anthropic.com',
     useAnthropicFormat: true,
   },
@@ -103,25 +104,25 @@ const PROVIDERS = {
   qwen: {
     name: '阿里通义千问',
     baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
-    defaultModel: 'qwen3.7-plus',
+    defaultModel: 'qwen-max-latest',
     envKey: 'QWEN_API_KEY',
-    models: ['qwen3.7-max', 'qwen3.7-plus', 'qwen3.6-flash', 'qwen3-long'],
+    models: ['qwen-max-latest', 'qwen-plus-latest', 'qwen-turbo-latest', 'qwen-long-latest'],
     docs: 'https://dashscope.console.aliyun.com',
   },
   zhipu: {
     name: '智谱 GLM',
     baseUrl: 'https://open.bigmodel.cn/api/paas/v4',
-    defaultModel: 'glm-4.5-plus',
+    defaultModel: 'glm-4-plus',
     envKey: 'ZHIPU_API_KEY',
-    models: ['glm-4.5-plus', 'glm-4.5-air', 'glm-4.5-flash', 'glm-4-plus'],
+    models: ['glm-4-plus', 'glm-4-air', 'glm-4-flash', 'glm-4-plus-0115'],
     docs: 'https://open.bigmodel.cn',
   },
   doubao: {
     name: '字节豆包',
     baseUrl: 'https://ark.cn-beijing.volces.com/api/v3',
-    defaultModel: 'doubao-pro-256k',
+    defaultModel: 'doubao-pro-32k',
     envKey: 'DOUBAO_API_KEY',
-    models: ['doubao-pro-256k', 'doubao-pro-128k', 'doubao-lite-256k', 'doubao-lite-128k'],
+    models: ['doubao-pro-32k', 'doubao-pro-256k', 'doubao-lite-256k', 'doubao-lite-128k'],
     docs: 'https://www.volcengine.com/product/doubao',
   },
   kimi: {
@@ -129,7 +130,7 @@ const PROVIDERS = {
     baseUrl: 'https://api.moonshot.cn/v1',
     defaultModel: 'moonshot-v1-128k',
     envKey: 'KIMI_API_KEY',
-    models: ['moonshot-v1-8k', 'moonshot-v1-32k', 'moonshot-v1-128k'],
+    models: ['moonshot-v1-8k', 'moonshot-v1-32k', 'moonshot-v1-128k', 'kimi-k2-turbo'],
     docs: 'https://platform.moonshot.cn',
   },
   moonshot: {
@@ -137,25 +138,57 @@ const PROVIDERS = {
     baseUrl: 'https://api.moonshot.cn/v1',
     defaultModel: 'moonshot-v1-128k',
     envKey: 'MOONSHOT_API_KEY',
-    models: ['moonshot-v1-8k', 'moonshot-v1-32k', 'moonshot-v1-128k'],
+    models: ['moonshot-v1-8k', 'moonshot-v1-32k', 'moonshot-v1-128k', 'kimi-k2-turbo'],
     docs: 'https://platform.moonshot.cn',
   },
-
-  // ========== 新增国产大模型 ==========
+  // ========== 新增提供商 ==========
+  xai: {
+    name: 'xAI Grok',
+    baseUrl: 'https://api.x.ai/v1',
+    defaultModel: 'grok-3-mini',
+    envKey: 'XAI_API_KEY',
+    models: ['grok-3-mini', 'grok-3', 'grok-2'],
+    docs: 'https://x.ai/api',
+  },
+  minimodel: {
+    name: '面壁智能 MiniCPM',
+    baseUrl: 'https://api.modelbest.cn/v1',
+    defaultModel: 'minicpm-m3-pro',
+    envKey: 'MINIMODEL_API_KEY',
+    models: ['minicpm-m3-pro', 'minicpm-m2.6', 'minicpm-m2.5'],
+    docs: 'https://modelbest.cn',
+  },
+  yi: {
+    name: '零一万物 Yi',
+    baseUrl: 'https://api.lingyiwanwu.com/v1',
+    defaultModel: 'yi-lightning',
+    envKey: 'YI_API_KEY',
+    models: ['yi-lightning', 'yi-large', 'yi-medium'],
+    docs: 'https://platform.lingyiwanwu.com',
+  },
+  together: {
+    name: 'Together AI',
+    baseUrl: 'https://api.together.xyz/v1',
+    defaultModel: 'meta-llama/Llama-3.3-70B-Instruct-Turbo',
+    envKey: 'TOGETHER_API_KEY',
+    models: ['meta-llama/Llama-3.3-70B-Instruct-Turbo', 'Qwen/Qwen2.5-72B-Instruct'],
+    docs: 'https://together.ai',
+  },
+  // ========== 原有国产大模型 ==========
   stepfun: {
     name: '阶跃星辰',
     baseUrl: 'https://api.stepfun.com/v1',
-    defaultModel: 'step-1.5-32k',
+    defaultModel: 'step-3-512k',
     envKey: 'STEPFUN_API_KEY',
-    models: ['step-1.5-32k', 'step-1.5-128k', 'step-1.5-256k'],
+    models: ['step-3-512k', 'step-1.5-32k', 'step-1.5-256k'],
     docs: 'https://platform.stepfun.com',
   },
   mimor: {
     name: '小米 Mimo',
     baseUrl: 'https://api.mimor.ai/v1',
-    defaultModel: 'mimo-v1',
+    defaultModel: 'mimo-v2',
     envKey: 'MIMOR_API_KEY',
-    models: ['mimo-v1', 'mimo-v1-32k'],
+    models: ['mimo-v2', 'mimo-v1-32k'],
     docs: 'https://platform.mimor.ai',
   },
   kling: {
@@ -169,9 +202,9 @@ const PROVIDERS = {
   hunyuan: {
     name: '腾讯混元',
     baseUrl: 'https://api.hunyuan.tencent.com/v1',
-    defaultModel: 'hy-3.0-pro',
+    defaultModel: 'hy-4.0-pro',
     envKey: 'HUNYUAN_API_KEY',
-    models: ['hy-3.0-pro', 'hy-3.0-flash', 'hy-2.0-pro'],
+    models: ['hy-4.0-pro', 'hy-3.0-pro', 'hy-3.0-flash'],
     docs: 'https://cloud.tencent.com/product/hunyuan',
   },
   pangu: {
@@ -252,7 +285,6 @@ const PROVIDERS = {
     models: ['qwen-plus', 'qwen-turbo', 'deepseek-r1', 'kimi-moonshot'],
     docs: 'https://help.aliyun.com/product/2712598.html',
   },
-
   // ========== 自定义（保留） ==========
   custom: {
     name: '自定义 OpenAI 兼容',
