@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>LumaPost 光影邮报 · Web UI</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="app">
+    <aside class="sidebar">
+      <div class="logo"><span class="logo-icon">📰</span><span class="logo-text">LumaPost</span></div>
+      <nav class="nav">
+        <a href="#dashboard" class="nav-item active" data-page="dashboard"><span>📊</span> 仪表盘</a>
+        <a href="#config" class="nav-item" data-page="config"><span>⚙️</span> 配置</a>
+        <a href="#providers" class="nav-item" data-page="providers"><span>🤖</span> AI 提供商</a>
+        <a href="#history" class="nav-item" data-page="history"><span>📜</span> 历史记录</a>
+        <a href="#preview" class="nav-item" data-page="preview"><span>👁️</span> 邮件预览</a>
+      </nav>
+      <div class="sidebar-footer">
+        <button id="btnRunFetch" class="btn btn-primary btn-block">🚀 立即抓取</button>
+      </div>
+    </aside>
+    <main class="main">
+      <section id="page-dashboard" class="page active">
+        <header class="page-header"><h1>仪表盘</h1><button id="btnRefresh" class="btn btn-secondary">🔄 刷新</button></header>
+        <div class="cards">
+          <div class="card"><div class="card-icon">🤖</div><div class="card-body"><div class="card-value" id="stat-provider">—</div><div class="card-label">当前 AI 提供商</div></div></div>
+          <div class="card"><div class="card-icon">📮</div><div class="card-body"><div class="card-value" id="stat-mail">—</div><div class="card-label">邮件服务商</div></div></div>
+          <div class="card"><div class="card-icon">📅</div><div class="card-body"><div class="card-value" id="stat-last-fetch">—</div><div class="card-label">上次抓取</div></div></div>
+          <div class="card"><div class="card-icon">📧</div><div class="card-body"><div class="card-value" id="stat-last-send">—</div><div class="card-label">上次发送</div></div></div>
+        </div>
+        <div class="section"><h2>📋 系统状态</h2><div id="systemStatus" class="status-list">
+          <div class="status-item"><span class="status-label">配置文件</span><span class="status-value" id="status-config">检查中...</span></div>
+          <div class="status-item"><span class="status-label">AI API</span><span class="status-value" id="status-ai">检查中...</span></div>
+          <div class="status-item"><span class="status-label">邮件服务</span><span class="status-value" id="status-mail">检查中...</span></div>
+        </div></div>
+        <div class="section"><h2>📰 最新新闻</h2><div id="latestNews" class="news-list"><div class="empty">暂无新闻数据</div></div></div>
+      </section>
+      <section id="page-config" class="page">
+        <header class="page-header"><h1>配置</h1></header>
+        <form id="configForm" class="config-form">
+          <fieldset><legend>🤖 AI 设置</legend>
+            <div class="form-row"><label>提供商</label><select name="ai.provider" id="cfg-ai-provider"><option value="deepseek">DeepSeek</option><option value="openai">OpenAI</option><option value="anthropic">Anthropic</option><option value="google">Google Gemini</option></select></div>
+            <div class="form-row"><label>API Key</label><input type="password" name="ai.apiKey" id="cfg-ai-apiKey" placeholder="sk-xxx"></div>
+            <div class="form-row"><label>模型</label><input type="text" name="ai.model" id="cfg-ai-model" placeholder="自动使用默认"></div>
+            <div class="form-row"><label>Base URL</label><input type="text" name="ai.baseUrl" id="cfg-ai-baseUrl" placeholder="可选，自定义地址"></div>
+            <div class="form-row"><label>Temperature</label><input type="number" name="ai.temperature" id="cfg-ai-temperature" min="0" max="2" step="0.1" value="0.7"></div>
+            <div class="form-row"><label>Max Tokens</label><input type="number" name="ai.maxTokens" id="cfg-ai-maxTokens" value="4096"></div>
+          </fieldset>
+          <fieldset><legend>📮 邮件设置</legend>
+            <div class="form-row"><label>服务商</label><select name="mail.provider" id="cfg-mail-provider"><option value="qq">QQ邮箱</option><option value="netease">网易163</option><option value="gmail">Gmail</option><option value="outlook">Outlook</option></select></div>
+            <div class="form-row"><label>发件邮箱</label><input type="email" name="mail.user" id="cfg-mail-user" placeholder="your@email.com"></div>
+            <div class="form-row"><label>授权码/密码</label><input type="password" name="mail.pass" id="cfg-mail-pass" placeholder="SMTP 授权码"></div>
+            <div class="form-row"><label>收件邮箱</label><input type="email" name="mail.to" id="cfg-mail-to" placeholder="可选，默认同发件"></div>
+          </fieldset>
+          <div class="form-actions"><button type="submit" class="btn btn-primary">💾 保存配置</button><button type="reset" class="btn btn-secondary">↩️ 重置</button><button type="button" id="btnValidate" class="btn btn-success">✓ 验证</button></div>
+        </form>
+      </section>
+      <section id="page-providers" class="page">
+        <header class="page-header"><h1>AI 提供商</h1><button id="btnLoadModels" class="btn btn-secondary">🔄 加载模型列表</button></header>
+        <div class="provider-grid" id="providerGrid"></div>
+        <div class="section"><h2>📋 模型列表</h2><div class="model-list" id="modelList"><div class="empty">点击上方按钮加载模型列表</div></div></div>
+      </section>
+      <section id="page-history" class="page">
+        <header class="page-header"><h1>历史记录</h1><button id="btnClearHistory" class="btn btn-danger">🗑️ 清空</button></header>
+        <div class="history-tabs"><button class="tab active" data-tab="fetch">📰 抓取历史</button><button class="tab" data-tab="send">📧 发送历史</button></div>
+        <div id="historyFetch" class="history-list active"><div class="empty">暂无抓取记录</div></div>
+        <div id="historySend" class="history-list"><div class="empty">暂无发送记录</div></div>
+      </section>
+      <section id="page-preview" class="page">
+        <header class="page-header"><h1>邮件预览</h1><div class="header-actions"><select id="previewPeriod"><option value="morning">🌅 早报</option><option value="noon">☀️ 午报</option><option value="afternoon">🌇 午后</option><option value="evening">🌙 晚间</option></select><button id="btnPreview" class="btn btn-primary">👁️ 生成预览</button></div></header>
+        <iframe id="previewFrame" class="preview-frame"></iframe>
+      </section>
+    </main>
+  </div>
+  <div id="toastContainer" class="toast-container"></div>
+  <div id="loading" class="loading hidden"><div class="spinner"></div><span>处理中...</span></div>
+  <script src="app.js"></script>
+</body>
+</html>
