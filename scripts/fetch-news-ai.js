@@ -407,6 +407,66 @@ const EXTRA_SOURCES = [
 async function fetchExtraNewsContext() {
   const allItems = [];
 
+  // ── A0) 中文热榜 + 游戏 + 行情（融合自 daily-news）──
+  try {
+    const hot = require('./hotboard');
+    const store0 = getStore();
+    const enhCfg = (store0 && store0.get('enhance')) || {};
+    if (enhCfg.enableHotboard !== false) {
+      console.log('  ⏳ 中文热榜 / Steam / Epic / GitHub Trending...');
+      const t0 = Date.now();
+      const r = await hot.fetchAll({ limit: 8 });
+      const hotBoards = (r.hotboards || []).filter((x) => !x.error && x.items.length);
+
+      for (const hb of hotBoards) {
+        allItems.push({
+          source: hb.name,
+          category: hb.category,
+          items: hb.items.map((it) => ({
+            raw_title: it.title,
+            raw_desc: it.summary || '',
+            hot: 10 - Math.min((it.rank || 1) - 1, 9),
+            rank: it.rank || 1,
+            url: it.link,
+            source: hb.name,
+            updateTime: it.publishedAt,
+          })),
+        });
+      }
+
+      const pushGroup = (r2, name, cat) => {
+        if (r2 && r2.items && r2.items.length) {
+          allItems.push({
+            source: name,
+            category: cat,
+            items: r2.items.map((it, i) => ({
+              raw_title: it.title,
+              raw_desc: it.summary || '',
+              hot: 10 - Math.min(i, 9),
+              rank: i + 1,
+              url: it.link,
+              source: name,
+              updateTime: it.publishedAt,
+            })),
+          });
+        }
+      };
+      pushGroup(r.steam, 'Steam 特惠', 'games');
+      pushGroup(r.epic, 'Epic 限免', 'games');
+      pushGroup(r.trending, 'GitHub Trending', 'github');
+
+      // 行情单独挂到全局，由主流程读取
+      if (r.stocks && r.stocks.items && r.stocks.items.length) {
+        global.__LUMAPOST_STOCKS__ = r.stocks.items;
+      }
+
+      const okHot = hotBoards.length;
+      console.log(`  ✓ 热榜 ${okHot}/${(r.hotboards || []).length} · Steam ${r.steam.items.length} · Epic ${r.epic.items.length} · GitHub ${r.trending.items.length} · 股票 ${r.stocks.items.length}  (${((Date.now() - t0) / 1000).toFixed(1)}s)`);
+    }
+  } catch (e) {
+    console.log(`  ⚠ 热榜模块不可用: ${e.message}`);
+  }
+
   // ── A) RSS 订阅源（内置目录 + 用户自定义，优先）──
   try {
     const rssFetcher = require('./rss-fetcher');
