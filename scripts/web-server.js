@@ -423,6 +423,131 @@ async function handleAPI(req, res) {
       return sendJSON(res, { success: true, sources: clean });
     }
 
+    /* ---- 内置源目录 ---- */
+    if (p === '/api/sources/catalog' && m === 'GET') {
+      let catalog;
+      try { catalog = require('./sources-catalog'); }
+      catch (e) { return sendError(res, '源目录不可用: ' + e.message); }
+      return sendJSON(res, {
+        catalog: catalog.CATALOG,
+        categories: catalog.CATEGORIES,
+        engines: catalog.SEARCH_ENGINES,
+        total: catalog.CATALOG.length,
+      });
+    }
+
+    /* ---- 导入内置源 ---- */
+    if (p === '/api/sources/import' && m === 'POST') {
+      const body = await parseBody(req);
+      let catalog;
+      try { catalog = require('./sources-catalog'); } catch (e) { return sendError(res, e.message); }
+
+      const mode = body.mode || 'recommended';   // recommended | category | all | keys
+      let picked = [];
+      if (mode === 'all') {
+        picked = catalog.CATALOG.slice();
+      } else if (mode === 'category') {
+        picked = catalog.getByCategory(body.category || 'ai');
+      } else if (mode === 'keys') {
+        const set = new Set(body.urls || []);
+        picked = catalog.CATALOG.filter(s => set.has(s.url));
+      } else {
+        picked = catalog.getRecommended(body.perCategory || 2);
+      }
+
+      const cfg = configStore.getAll();
+      const existing = (cfg.sources && cfg.sources.rss) || [];
+      const seen = new Set(existing.map(s => s.url));
+      let added = 0;
+      const merged = existing.slice();
+      for (const s of picked) {
+        if (seen.has(s.url)) continue;
+        seen.add(s.url);
+        merged.push({ name: s.name, url: s.url, category: s.category, enabled: true });
+        added++;
+      }
+      configStore.update({ sources: { enableRss: true, rss: merged } });
+      return sendJSON(res, { success: true, added: added, total: merged.length });
+    }
+
+    /* ---- 单个源连通性测试 ---- */
+    if (p === '/api/sources/test' && m === 'POST') {
+      const body = await parseBody(req);
+      if (!body.url) return sendError(res, '缺少 url', 400);
+      try {
+        const rssFetcher = require('./rss-fetcher');
+        const t0 = Date.now();
+        const r = await rssFetcher.fetchFeed({ name: body.name || body.url, url: body.url }, { limit: 5, timeout: 15000 });
+        return sendJSON(res, {
+          success: !r.error && r.items.length > 0,
+          count: r.items.length,
+          error: r.error || null,
+          latencyMs: Date.now() - t0,
+          sample: r.items.slice(0, 3).map(it => ({ title: it.title, link: it.link })),
+        });
+      } catch (e) {
+        return sendJSON(res, { success: false, error: e.message, count: 0 });
+      }
+    }
+
+    /* ---- 批量抓取预览（不写盘）---- */
+    if (p === '/api/sources/fetch' && m === 'POST') {
+      const body = await parseBody(req);
+      const cfg = configStore.getAll();
+      let list = (cfg.sources && cfg.sources.rss) || [];
+      if (Array.isArray(body.urls) && body.urls.length) {
+        const set = new Set(body.urls);
+        list = list.filter(s => set.has(s.url));
+      }
+      list = list.filter(s => s.enabled !== false);
+      if (!list.length) return sendError(res, '没有启用的信息源', 400);
+
+      try {
+        const rssFetcher = require('./rss-fetcher');
+        const t0 = Date.now();
+        const results = await rssFetcher.fetchAll(list, {
+          concurrency: body.concurrency || 8,
+          limit: body.limit || 5,
+          timeout: 15000,
+        });
+        const agg = rssFetcher.aggregate(results, { limit: 20 });
+        return sendJSON(res, {
+          success: true,
+          latencyMs: Date.now() - t0,
+          stats: {
+            total: results.length,
+            ok: results.filter(r => !r.error && r.items.length).length,
+            failed: results.filter(r => r.error).length,
+            items: agg.total,
+          },
+          byCategory: Object.keys(agg.byCategory).map(k => ({ category: k, count: agg.byCategory[k].length })),
+          latest: agg.all.slice(0, 30),
+          errors: results.filter(r => r.error).map(r => ({ name: r.name, error: r.error })),
+        });
+      } catch (e) {
+        return sendError(res, '抓取失败: ' + e.message);
+      }
+    }
+
+    /* ---- 搜索 ---- */
+    if (p === '/api/search' && m === 'GET') {
+      const q = (u.query.q || '').toString().trim();
+      if (!q) return sendError(res, '缺少查询参数 q', 400);
+      const mode = (u.query.mode || 'bing').toString();
+      const limit = Math.min(Number(u.query.limit) || 10, 30);
+      try {
+        const ws = require('./web-search');
+        const r = await ws.unified(q, {
+          mode: mode,
+          engine: (u.query.engine || 'bing').toString(),
+          limit: limit,
+        });
+        return sendJSON(res, r);
+      } catch (e) {
+        return sendError(res, '搜索失败: ' + e.message);
+      }
+    }
+
     return sendError(res, 'API 不存在: ' + p, 404);
   } catch (e) {
     console.error('[api] ' + p + ' -> ' + e.message);
