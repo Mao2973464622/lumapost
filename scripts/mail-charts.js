@@ -1,10 +1,12 @@
 #!/usr/bin/env node
 /**
- * mail-charts.js — 邮件 SVG 图表库 (v6.1)
+ * mail-charts.js — 邮件 SVG 图表库 (v8.0)
  *
- * 纯 SVG / 零依赖 / 内联到邮件。
- * 不使用 <style> 与 class（邮件客户端会剥离），全部用属性内联。
- * 动效使用 SMIL <animate>，QQ / Apple Mail 支持，Outlook 降级为静态。
+ * 核心原则：**静态即正确**。
+ *   每个图形都先用最终属性值绘制，动画只做「从 0 到最终值」的增强。
+ *   这样即使客户端剥离了 <animate>（QQ 邮箱常见），图形依然完整可见。
+ *
+ * 宽度：全部使用 viewBox + width:100%，由容器决定实际尺寸，天然适配移动端。
  */
 
 const T = {
@@ -24,7 +26,7 @@ function esc(s) {
 }
 
 /* ============================================================
-   1. 环形进度环 —— 版块占比
+   1. 环形图 —— 静态分段绘制 + 可选动效
    ============================================================ */
 function donutChart(data, opts) {
   opts = opts || {};
@@ -34,125 +36,109 @@ function donutChart(data, opts) {
   const cx = size / 2;
   const cy = size / 2;
   const C = 2 * Math.PI * r;
-
   const total = data.reduce((s, d) => s + d.value, 0) || 1;
   const colors = ['#6366F1', '#8B5CF6', '#EC4899', '#F59E0B', '#10B981', '#06B6D4', '#3B82F6', '#F97316'];
 
-  let offset = 0;
-  const rings = data.map((d, i) => {
+  // 每段用 stroke-dashoffset 定位，长度直接写最终值
+  let acc = 0;
+  const segs = data.map((d, i) => {
     const frac = d.value / total;
     const len = frac * C;
     const color = d.color || colors[i % colors.length];
-    const seg = `
-      <circle cx="${cx}" cy="${cy}" r="${r}" fill="none"
-        stroke="${color}" stroke-width="${stroke}"
-        stroke-dasharray="0 ${C}" stroke-linecap="round"
-        transform="rotate(-90 ${cx} ${cy})"
-        style="opacity:0">
-        <animate attributeName="stroke-dasharray"
-          from="0 ${C.toFixed(1)}" to="${len.toFixed(1)} ${(C - len).toFixed(1)}"
-          dur="0.9s" begin="${(i * 0.12).toFixed(2)}s" fill="freeze"
-          calcMode="spline" keySplines="0.22 1 0.36 1" keyTimes="0;1"/>
-        <animate attributeName="style"
-          from="opacity:0" to="opacity:1"
-          dur="0.3s" begin="${(i * 0.12).toFixed(2)}s" fill="freeze"/>
-      </circle>
-      <circle cx="${cx}" cy="${cy}" r="${r}" fill="none"
-        stroke="${color}" stroke-width="${stroke}"
-        stroke-dasharray="${len.toFixed(1)} ${(C - len).toFixed(1)}"
-        stroke-dashoffset="${(-offset).toFixed(1)}"
-        stroke-linecap="butt"
-        transform="rotate(-90 ${cx} ${cy})"
-        opacity="0"/>
-    `;
-    offset += len;
-    return seg;
+    const dashArray = len.toFixed(2) + ' ' + (C - len).toFixed(2);
+    const dashOffset = (-acc).toFixed(2);
+    acc += len;
+
+    // 2px 间隙让分段更清晰
+    const gap = 1.5;
+    const visible = Math.max(0, len - gap);
+    const dashVisible = visible.toFixed(2) + ' ' + (C - visible).toFixed(2);
+
+    return `<circle cx="${cx}" cy="${cy}" r="${r}" fill="none"
+      stroke="${color}" stroke-width="${stroke}"
+      stroke-dasharray="${dashVisible}"
+      stroke-dashoffset="${dashOffset}"
+      transform="rotate(-90 ${cx} ${cy})">
+      <animate attributeName="stroke-dasharray"
+        from="0 ${C.toFixed(2)}" to="${dashVisible}"
+        dur="0.8s" begin="${(i * 0.1).toFixed(2)}s" fill="freeze"
+        calcMode="spline" keySplines="0.22 1 0.36 1" keyTimes="0;1"/>
+    </circle>`;
   }).join('');
 
-  const top = data[0] || { label: '', value: 0 };
+  const centerVal = opts.centerText != null ? opts.centerText : total;
 
-  return `<svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}" xmlns="http://www.w3.org/2000/svg" style="display:block;margin:0 auto;">
+  return `<svg width="100%" viewBox="0 0 ${size} ${size}" xmlns="http://www.w3.org/2000/svg" style="display:block;width:100%;height:auto;max-width:${size}px;margin:0 auto;">
   <circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${T.line}" stroke-width="${stroke}"/>
-  ${rings}
-  <text x="${cx}" y="${cy - 4}" text-anchor="middle" font-family="-apple-system,PingFang SC,sans-serif" font-size="26" font-weight="800" fill="${T.ink}">
-    ${esc(total)}
-    <animate attributeName="opacity" from="0" to="1" dur="0.5s" begin="0.4s" fill="freeze"/>
-  </text>
-  <text x="${cx}" y="${cy + 18}" text-anchor="middle" font-family="-apple-system,PingFang SC,sans-serif" font-size="11" fill="${T.ink4}">
-    ${esc(opts.label || '条资讯')}
-  </text>
+  ${segs}
+  <text x="${cx}" y="${cy - 2}" text-anchor="middle" font-family="-apple-system,PingFang SC,sans-serif" font-size="26" font-weight="800" fill="${T.ink}">${esc(centerVal)}</text>
+  <text x="${cx}" y="${cy + 20}" text-anchor="middle" font-family="-apple-system,PingFang SC,sans-serif" font-size="11" fill="${T.ink4}">${esc(opts.label || '条资讯')}</text>
 </svg>`;
 }
 
 /* ============================================================
-   2. 横向条形图 —— 版块数量对比
+   2. 横向条形图 —— 宽度自适应
    ============================================================ */
 function barChartH(data, opts) {
   opts = opts || {};
-  const width = opts.width || 560;
-  const rowH = 34;
-  const labelW = opts.labelW || 110;
-  const valueW = 42;
-  const height = data.length * rowH + 8;
-  const barMax = width - labelW - valueW - 12;
+  const width = opts.width || 300;
+  const rowH = opts.rowH || 32;
+  const labelW = opts.labelW || 88;
+  const valueW = 32;
+  const height = data.length * rowH + 4;
+  const barMax = Math.max(20, width - labelW - valueW);
   const maxV = Math.max.apply(null, data.map((d) => d.value).concat([1]));
 
   const rows = data.map((d, i) => {
-    const y = i * rowH + 4;
-    const w = Math.max(6, (d.value / maxV) * barMax);
+    const y = i * rowH + 6;
+    const w = Math.max(4, (d.value / maxV) * barMax);
     const color = d.color || T.brand1;
     const gid = 'hb' + i + '_' + Math.floor(Math.random() * 1e6);
-    return `
-    <defs>
+
+    return `<defs>
       <linearGradient id="${gid}" x1="0" y1="0" x2="1" y2="0">
-        <stop offset="0%" stop-color="${color}" stop-opacity="0.65"/>
+        <stop offset="0%" stop-color="${color}" stop-opacity="0.6"/>
         <stop offset="100%" stop-color="${color}" stop-opacity="1"/>
       </linearGradient>
     </defs>
-    <g>
-      <text x="0" y="${y + 15}" font-family="-apple-system,PingFang SC,sans-serif" font-size="12" font-weight="600" fill="${T.ink2}">${esc(d.label)}</text>
-      <rect x="${labelW}" y="${y + 5}" width="${barMax}" height="9" rx="4.5" fill="${T.line}"/>
-      <rect x="${labelW}" y="${y + 5}" width="0" height="9" rx="4.5" fill="url(#${gid})">
-        <animate attributeName="width" from="0" to="${w.toFixed(1)}"
-          dur="0.7s" begin="${(i * 0.08).toFixed(2)}s" fill="freeze"
-          calcMode="spline" keySplines="0.22 1 0.36 1" keyTimes="0;1"/>
-      </rect>
-      <text x="${width}" y="${y + 15}" text-anchor="end" font-family="ui-monospace,Menlo,monospace" font-size="12" font-weight="700" fill="${color}" opacity="0">
-        ${d.value}
-        <animate attributeName="opacity" from="0" to="1" dur="0.4s" begin="${(i * 0.08 + 0.4).toFixed(2)}s" fill="freeze"/>
-      </text>
-    </g>`;
+    <text x="0" y="${y + 13}" font-family="-apple-system,PingFang SC,sans-serif" font-size="11.5" font-weight="600" fill="${T.ink2}">${esc(d.label)}</text>
+    <rect x="${labelW}" y="${y + 4}" width="${barMax}" height="8" rx="4" fill="${T.line}"/>
+    <rect x="${labelW}" y="${y + 4}" width="${w.toFixed(1)}" height="8" rx="4" fill="url(#${gid})">
+      <animate attributeName="width" from="0" to="${w.toFixed(1)}"
+        dur="0.65s" begin="${(i * 0.07).toFixed(2)}s" fill="freeze"
+        calcMode="spline" keySplines="0.22 1 0.36 1" keyTimes="0;1"/>
+    </rect>
+    <text x="${width}" y="${y + 13}" text-anchor="end" font-family="ui-monospace,Menlo,monospace" font-size="11" font-weight="700" fill="${color}">${d.value}</text>`;
   }).join('');
 
-  return `<svg width="100%" viewBox="0 0 ${width} ${height}" xmlns="http://www.w3.org/2000/svg" style="display:block;width:100%;height:auto;max-width:${width}px;">
+  return `<svg width="100%" viewBox="0 0 ${width} ${height}" xmlns="http://www.w3.org/2000/svg" style="display:block;width:100%;height:auto;">
   ${rows}
 </svg>`;
 }
 
 /* ============================================================
-   3. 竖向柱状图 —— 趋势/时间分布
+   3. 竖向柱状图
    ============================================================ */
 function barChartV(data, opts) {
   opts = opts || {};
-  const width = opts.width || 560;
-  const height = opts.height || 200;
-  const padL = 34;
-  const padB = 34;
-  const padT = 22;
+  const width = opts.width || 340;
+  const height = opts.height || 170;
+  const padL = 26;
+  const padB = 28;
+  const padT = 18;
   const chartH = height - padB - padT;
-  const chartW = width - padL - 12;
+  const chartW = width - padL - 8;
   const n = data.length || 1;
   const slot = chartW / n;
-  const barW = Math.min(42, slot * 0.52);
+  const barW = Math.max(8, Math.min(36, slot * 0.5));
   const maxV = Math.max.apply(null, data.map((d) => d.value).concat([1]));
 
-  // 网格线
   let grid = '';
-  for (let i = 0; i <= 4; i++) {
-    const y = padT + (chartH / 4) * i;
-    const v = Math.round(maxV * (4 - i) / 4);
-    grid += `<line x1="${padL}" y1="${y}" x2="${width - 12}" y2="${y}" stroke="${T.line}" stroke-width="1"/>`;
-    grid += `<text x="${padL - 8}" y="${y + 4}" text-anchor="end" font-family="ui-monospace,Menlo,monospace" font-size="10" fill="${T.ink4}">${v}</text>`;
+  for (let i = 0; i <= 3; i++) {
+    const y = padT + (chartH / 3) * i;
+    const v = Math.round(maxV * (3 - i) / 3);
+    grid += `<line x1="${padL}" y1="${y}" x2="${width - 8}" y2="${y}" stroke="${T.line}" stroke-width="1"/>`;
+    grid += `<text x="${padL - 6}" y="${y + 3.5}" text-anchor="end" font-family="ui-monospace,Menlo,monospace" font-size="9" fill="${T.ink4}">${v}</text>`;
   }
 
   const bars = data.map((d, i) => {
@@ -160,51 +146,45 @@ function barChartV(data, opts) {
     const x = padL + slot * i + (slot - barW) / 2;
     const y = padT + chartH - h;
     const color = d.color || T.brand1;
-    const gid = 'g' + i + '_' + Math.floor(Math.random() * 1e6);
-    return `
-    <defs>
+    const gid = 'vb' + i + '_' + Math.floor(Math.random() * 1e6);
+    return `<defs>
       <linearGradient id="${gid}" x1="0" y1="0" x2="0" y2="1">
         <stop offset="0%" stop-color="${color}" stop-opacity="1"/>
-        <stop offset="100%" stop-color="${color}" stop-opacity="0.55"/>
+        <stop offset="100%" stop-color="${color}" stop-opacity="0.5"/>
       </linearGradient>
     </defs>
-    <rect x="${x}" y="${padT + chartH}" width="${barW}" height="0" rx="6" fill="url(#${gid})">
-      <animate attributeName="y" from="${padT + chartH}" to="${y.toFixed(1)}"
-        dur="0.75s" begin="${(i * 0.07).toFixed(2)}s" fill="freeze"
-        calcMode="spline" keySplines="0.22 1 0.36 1" keyTimes="0;1"/>
+    <rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${barW}" height="${h.toFixed(1)}" rx="5" fill="url(#${gid})">
       <animate attributeName="height" from="0" to="${h.toFixed(1)}"
-        dur="0.75s" begin="${(i * 0.07).toFixed(2)}s" fill="freeze"
+        dur="0.7s" begin="${(i * 0.06).toFixed(2)}s" fill="freeze"
+        calcMode="spline" keySplines="0.22 1 0.36 1" keyTimes="0;1"/>
+      <animate attributeName="y" from="${(padT + chartH).toFixed(1)}" to="${y.toFixed(1)}"
+        dur="0.7s" begin="${(i * 0.06).toFixed(2)}s" fill="freeze"
         calcMode="spline" keySplines="0.22 1 0.36 1" keyTimes="0;1"/>
     </rect>
-    <text x="${(x + barW / 2).toFixed(1)}" y="${(y - 6).toFixed(1)}" text-anchor="middle"
-      font-family="ui-monospace,Menlo,monospace" font-size="11" font-weight="700" fill="${T.ink}" opacity="0">
-      ${d.value}
-      <animate attributeName="opacity" from="0" to="1" dur="0.4s" begin="${(i * 0.07 + 0.5).toFixed(2)}s" fill="freeze"/>
-    </text>
-    <text x="${(x + barW / 2).toFixed(1)}" y="${height - 12}" text-anchor="middle"
-      font-family="-apple-system,PingFang SC,sans-serif" font-size="10.5" fill="${T.ink3}">
-      ${esc(d.label)}
-    </text>`;
+    <text x="${(x + barW / 2).toFixed(1)}" y="${(y - 5).toFixed(1)}" text-anchor="middle"
+      font-family="ui-monospace,Menlo,monospace" font-size="10" font-weight="700" fill="${T.ink}">${d.value}</text>
+    <text x="${(x + barW / 2).toFixed(1)}" y="${height - 9}" text-anchor="middle"
+      font-family="-apple-system,PingFang SC,sans-serif" font-size="9.5" fill="${T.ink3}">${esc(d.label)}</text>`;
   }).join('');
 
-  return `<svg width="100%" viewBox="0 0 ${width} ${height}" xmlns="http://www.w3.org/2000/svg" style="display:block;width:100%;height:auto;max-width:${width}px;">
+  return `<svg width="100%" viewBox="0 0 ${width} ${height}" xmlns="http://www.w3.org/2000/svg" style="display:block;width:100%;height:auto;">
   ${grid}
   ${bars}
 </svg>`;
 }
 
 /* ============================================================
-   4. 折线面积图 —— 趋势走势
+   4. 折线面积图
    ============================================================ */
 function areaChart(data, opts) {
   opts = opts || {};
-  const width = opts.width || 560;
-  const height = opts.height || 180;
-  const padL = 34;
-  const padB = 30;
-  const padT = 20;
+  const width = opts.width || 340;
+  const height = opts.height || 150;
+  const padL = 26;
+  const padB = 26;
+  const padT = 16;
   const chartH = height - padB - padT;
-  const chartW = width - padL - 14;
+  const chartW = width - padL - 10;
   const n = data.length;
   if (!n) return '';
 
@@ -214,79 +194,68 @@ function areaChart(data, opts) {
   const span = (maxV - minV) || 1;
   const stepX = n > 1 ? chartW / (n - 1) : 0;
 
-  const pts = data.map((d, i) => {
-    const x = padL + stepX * i;
-    const y = padT + chartH - ((d.value - minV) / span) * chartH;
-    return { x: x, y: y, label: d.label, value: d.value };
-  });
+  const pts = data.map((d, i) => ({
+    x: padL + stepX * i,
+    y: padT + chartH - ((d.value - minV) / span) * chartH,
+    label: d.label,
+    value: d.value,
+  }));
 
-  // 平滑曲线
   let path = 'M ' + pts[0].x.toFixed(1) + ' ' + pts[0].y.toFixed(1);
   for (let i = 1; i < pts.length; i++) {
     const p0 = pts[i - 1];
     const p1 = pts[i];
-    const cx1 = p0.x + (p1.x - p0.x) / 3;
-    const cx2 = p0.x + (p1.x - p0.x) * 2 / 3;
-    path += ' C ' + cx1.toFixed(1) + ' ' + p0.y.toFixed(1) + ', ' +
-            cx2.toFixed(1) + ' ' + p1.y.toFixed(1) + ', ' +
+    const c1 = p0.x + (p1.x - p0.x) / 3;
+    const c2 = p0.x + (p1.x - p0.x) * 2 / 3;
+    path += ' C ' + c1.toFixed(1) + ' ' + p0.y.toFixed(1) + ', ' +
+            c2.toFixed(1) + ' ' + p1.y.toFixed(1) + ', ' +
             p1.x.toFixed(1) + ' ' + p1.y.toFixed(1);
   }
 
   const areaPath = path + ' L ' + pts[pts.length - 1].x.toFixed(1) + ' ' + (padT + chartH) +
     ' L ' + pts[0].x.toFixed(1) + ' ' + (padT + chartH) + ' Z';
 
-  const dots = pts.map((p, i) => `
-    <circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="0" fill="${T.white}" stroke="${T.brand1}" stroke-width="2.5">
-      <animate attributeName="r" from="0" to="4" dur="0.3s" begin="${(i * 0.1 + 0.6).toFixed(2)}s" fill="freeze"/>
-    </circle>
-    <text x="${p.x.toFixed(1)}" y="${height - 10}" text-anchor="middle"
-      font-family="-apple-system,PingFang SC,sans-serif" font-size="10" fill="${T.ink4}">${esc(p.label)}</text>
-  `).join('');
+  const dots = pts.map((p) =>
+    `<circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="3.5" fill="${T.white}" stroke="${T.brand1}" stroke-width="2"><animate attributeName="r" from="0" to="3.5" dur="0.3s" begin="0.5s" fill="freeze"/></circle>` +
+    `<text x="${p.x.toFixed(1)}" y="${height - 8}" text-anchor="middle" font-family="-apple-system,PingFang SC,sans-serif" font-size="9" fill="${T.ink4}">${esc(p.label)}</text>`
+  ).join('');
 
   const grid = [0, 1, 2, 3].map((i) => {
     const y = padT + (chartH / 3) * i;
-    return `<line x1="${padL}" y1="${y}" x2="${width - 14}" y2="${y}" stroke="${T.line}" stroke-width="1" stroke-dasharray="3 4"/>`;
+    return `<line x1="${padL}" y1="${y}" x2="${width - 10}" y2="${y}" stroke="${T.line}" stroke-width="1" stroke-dasharray="3 4"/>`;
   }).join('');
 
-  const gid = 'area' + Math.floor(Math.random() * 1e6);
+  const gid = 'ar' + Math.floor(Math.random() * 1e6);
 
-  return `<svg width="100%" viewBox="0 0 ${width} ${height}" xmlns="http://www.w3.org/2000/svg" style="display:block;width:100%;height:auto;max-width:${width}px;">
+  return `<svg width="100%" viewBox="0 0 ${width} ${height}" xmlns="http://www.w3.org/2000/svg" style="display:block;width:100%;height:auto;">
   <defs>
     <linearGradient id="${gid}" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="${T.brand1}" stop-opacity="0.28"/>
+      <stop offset="0%" stop-color="${T.brand1}" stop-opacity="0.3"/>
       <stop offset="100%" stop-color="${T.brand1}" stop-opacity="0.02"/>
     </linearGradient>
   </defs>
   ${grid}
-  <path d="${areaPath}" fill="url(#${gid})" opacity="0">
-    <animate attributeName="opacity" from="0" to="1" dur="0.6s" begin="0.35s" fill="freeze"/>
-  </path>
-  <path d="${path}" fill="none" stroke="${T.brand1}" stroke-width="2.5" stroke-linecap="round"
-    stroke-dasharray="2000" stroke-dashoffset="2000">
-    <animate attributeName="stroke-dashoffset" from="2000" to="0" dur="1.2s" begin="0.1s" fill="freeze"
-      calcMode="spline" keySplines="0.22 1 0.36 1" keyTimes="0;1"/>
-  </path>
+  <path d="${areaPath}" fill="url(#${gid})"/>
+  <path d="${path}" fill="none" stroke="${T.brand1}" stroke-width="2.5" stroke-linecap="round"/>
   ${dots}
 </svg>`;
 }
 
 /* ============================================================
-   5. 雷达图 —— 版块覆盖度
+   5. 雷达图
    ============================================================ */
 function radarChart(data, opts) {
   opts = opts || {};
-  const size = opts.size || 260;
+  const size = opts.size || 240;
   const cx = size / 2;
   const cy = size / 2;
-  const r = size / 2 - 44;
+  const r = size / 2 - 40;
   const n = data.length;
   if (n < 3) return '';
 
   const maxV = Math.max.apply(null, data.map((d) => d.value).concat([1]));
-
   const angleOf = (i) => (Math.PI * 2 * i / n) - Math.PI / 2;
 
-  // 网格
   let rings = '';
   [0.25, 0.5, 0.75, 1].forEach((f) => {
     const pts = [];
@@ -297,91 +266,79 @@ function radarChart(data, opts) {
     rings += `<polygon points="${pts.join(' ')}" fill="none" stroke="${T.line}" stroke-width="1"/>`;
   });
 
-  // 轴线
   let axes = '';
   for (let i = 0; i < n; i++) {
     const a = angleOf(i);
     axes += `<line x1="${cx}" y1="${cy}" x2="${(cx + Math.cos(a) * r).toFixed(1)}" y2="${(cy + Math.sin(a) * r).toFixed(1)}" stroke="${T.line}" stroke-width="1"/>`;
   }
 
-  // 数据多边形
   const dataPts = data.map((d, i) => {
     const a = angleOf(i);
-    const f = Math.max(0.08, d.value / maxV);
+    const f = Math.max(0.1, d.value / maxV);
     return (cx + Math.cos(a) * r * f).toFixed(1) + ',' + (cy + Math.sin(a) * r * f).toFixed(1);
   }).join(' ');
 
-  // 标签
   const labels = data.map((d, i) => {
     const a = angleOf(i);
-    const lx = cx + Math.cos(a) * (r + 20);
-    const ly = cy + Math.sin(a) * (r + 20);
+    const lx = cx + Math.cos(a) * (r + 18);
+    const ly = cy + Math.sin(a) * (r + 18);
     const anchor = Math.abs(Math.cos(a)) < 0.3 ? 'middle' : (Math.cos(a) > 0 ? 'start' : 'end');
-    return `<text x="${lx.toFixed(1)}" y="${(ly + 4).toFixed(1)}" text-anchor="${anchor}"
-      font-family="-apple-system,PingFang SC,sans-serif" font-size="10.5" font-weight="600" fill="${T.ink3}">${esc(d.label)}</text>`;
+    return `<text x="${lx.toFixed(1)}" y="${(ly + 3.5).toFixed(1)}" text-anchor="${anchor}"
+      font-family="-apple-system,PingFang SC,sans-serif" font-size="9.5" font-weight="600" fill="${T.ink3}">${esc(d.label)}</text>`;
   }).join('');
 
-  const gid = 'radar' + Math.floor(Math.random() * 1e6);
+  const gid = 'rd' + Math.floor(Math.random() * 1e6);
 
   return `<svg width="100%" viewBox="0 0 ${size} ${size}" xmlns="http://www.w3.org/2000/svg" style="display:block;width:100%;height:auto;max-width:${size}px;margin:0 auto;">
   <defs>
     <linearGradient id="${gid}" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0%" stop-color="${T.brand1}" stop-opacity="0.42"/>
-      <stop offset="100%" stop-color="${T.brand3}" stop-opacity="0.18"/>
+      <stop offset="0%" stop-color="${T.brand1}" stop-opacity="0.45"/>
+      <stop offset="100%" stop-color="${T.brand3}" stop-opacity="0.2"/>
     </linearGradient>
   </defs>
   ${rings}
   ${axes}
-  <polygon points="${dataPts}" fill="url(#${gid})" stroke="${T.brand2}" stroke-width="2" opacity="0">
-    <animate attributeName="opacity" from="0" to="1" dur="0.8s" begin="0.2s" fill="freeze"/>
-  </polygon>
+  <polygon points="${dataPts}" fill="url(#${gid})" stroke="${T.brand2}" stroke-width="2"/>
   ${labels}
 </svg>`;
 }
 
 /* ============================================================
-   6. 环形进度（多环）—— 数据概览
+   6. 环形进度
    ============================================================ */
 function progressRings(items, opts) {
   opts = opts || {};
   const size = opts.size || 88;
-  const stroke = 8;
+  const stroke = opts.stroke || 8;
   const r = (size - stroke) / 2;
   const cx = size / 2;
   const cy = size / 2;
   const C = 2 * Math.PI * r;
 
-  const rings = items.map((it, i) => {
-    const len = Math.min(1, it.ratio || 0) * C;
-    const color = it.color || T.brand1;
-    return `
-    <circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${T.line}" stroke-width="${stroke}"/>
-    <circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${color}" stroke-width="${stroke}"
-      stroke-linecap="round" transform="rotate(-90 ${cx} ${cy})"
-      stroke-dasharray="0 ${C.toFixed(1)}">
-      <animate attributeName="stroke-dasharray"
-        from="0 ${C.toFixed(1)}" to="${len.toFixed(1)} ${(C - len).toFixed(1)}"
-        dur="0.9s" begin="${(i * 0.1).toFixed(2)}s" fill="freeze"
-        calcMode="spline" keySplines="0.22 1 0.36 1" keyTimes="0;1"/>
-    </circle>
-    <text x="${cx}" y="${cy + 5}" text-anchor="middle"
-      font-family="ui-monospace,Menlo,monospace" font-size="15" font-weight="800" fill="${T.ink}">
-      ${it.display != null ? esc(it.display) : Math.round((it.ratio || 0) * 100)}
-    </text>`;
-  }).join('');
+  const it = items[0] || { ratio: 0 };
+  const len = Math.min(1, it.ratio || 0) * C;
+  const color = it.color || T.brand1;
 
-  return `<svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}" xmlns="http://www.w3.org/2000/svg" style="display:block;margin:0 auto;">
-  ${rings}
+  return `<svg width="100%" viewBox="0 0 ${size} ${size}" xmlns="http://www.w3.org/2000/svg" style="display:block;width:100%;height:auto;max-width:${size}px;margin:0 auto;">
+  <circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${T.line}" stroke-width="${stroke}"/>
+  <circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${color}" stroke-width="${stroke}"
+    stroke-linecap="round" transform="rotate(-90 ${cx} ${cy})"
+    stroke-dasharray="${len.toFixed(2)} ${(C - len).toFixed(2)}">
+    <animate attributeName="stroke-dasharray" from="0 ${C.toFixed(2)}" to="${len.toFixed(2)} ${(C - len).toFixed(2)}"
+      dur="0.8s" fill="freeze" calcMode="spline" keySplines="0.22 1 0.36 1" keyTimes="0;1"/>
+  </circle>
+  <text x="${cx}" y="${cy + 4}" text-anchor="middle"
+    font-family="ui-monospace,Menlo,monospace" font-size="14" font-weight="800" fill="${T.ink}">${it.display != null ? esc(it.display) : Math.round((it.ratio || 0) * 100)}</text>
 </svg>`;
 }
 
 /* ============================================================
-   7. 迷你走势线 —— 单条数据 sparkline
+   7. 迷你走势线
    ============================================================ */
 function sparkline(values, opts) {
   opts = opts || {};
-  const width = opts.width || 120;
-  const height = opts.height || 34;
+  const width = opts.width || 100;
+  const height = opts.height || 28;
   const color = opts.color || T.brand1;
   if (!values || values.length < 2) return '';
 
@@ -392,20 +349,14 @@ function sparkline(values, opts) {
 
   const pts = values.map((v, i) => ({
     x: i * stepX,
-    y: height - 3 - ((v - minV) / span) * (height - 6),
+    y: height - 2 - ((v - minV) / span) * (height - 4),
   }));
 
   let d = 'M ' + pts[0].x.toFixed(1) + ' ' + pts[0].y.toFixed(1);
-  for (let i = 1; i < pts.length; i++) {
-    d += ' L ' + pts[i].x.toFixed(1) + ' ' + pts[i].y.toFixed(1);
-  }
+  for (let i = 1; i < pts.length; i++) d += ' L ' + pts[i].x.toFixed(1) + ' ' + pts[i].y.toFixed(1);
 
-  return `<svg width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" xmlns="http://www.w3.org/2000/svg" style="display:block;">
-  <path d="${d}" fill="none" stroke="${color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
-    stroke-dasharray="400" stroke-dashoffset="400">
-    <animate attributeName="stroke-dashoffset" from="400" to="0" dur="0.9s" fill="freeze"
-      calcMode="spline" keySplines="0.22 1 0.36 1" keyTimes="0;1"/>
-  </path>
+  return `<svg width="100%" viewBox="0 0 ${width} ${height}" xmlns="http://www.w3.org/2000/svg" style="display:block;width:100%;height:auto;max-width:${width}px;">
+  <path d="${d}" fill="none" stroke="${color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
 </svg>`;
 }
 
