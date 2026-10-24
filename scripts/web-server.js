@@ -107,7 +107,7 @@ function sanitizeConfig(input) {
   }
 
   if (input.mail && typeof input.mail === 'object') {
-    const THEME_KEYS = ['minimal', 'dark', 'paper', 'ocean', 'neon', 'forest', 'sunset', 'sakura', 'aurora', 'mono', 'custom'];
+    const THEME_KEYS = ['minimal', 'sunset', 'sakura', 'forest', 'sky', 'mint', 'paper', 'gold', 'mono', 'crimson', 'custom'];
     const themeVal = str(input.mail.theme);
     out.mail = {
       provider: str(input.mail.provider, 40).toLowerCase() || 'qq',
