@@ -460,6 +460,64 @@ textarea.input{height:auto;min-height:84px;padding:11px var(--s-3);resize:vertic
 @media (max-width:520px){
   .cf-grid{grid-template-columns:1fr}
 }
+
+/* ---------- 模型选择器 ---------- */
+.model-picker{
+  margin-top:10px;background:var(--surface-2);border:1px solid var(--line);
+  border-radius:var(--r-md);overflow:hidden;
+  animation:mpIn var(--mid) var(--ease);
+}
+@keyframes mpIn{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:none}}
+.mp-head{padding:10px 12px;border-bottom:1px solid var(--line);background:var(--surface)}
+.mp-search-wrap{
+  display:flex;align-items:center;gap:8px;height:36px;padding:0 10px;
+  background:var(--input);border:1px solid var(--line-strong);border-radius:var(--r-sm);
+  transition:border-color var(--fast),box-shadow var(--fast);
+}
+.mp-search-wrap:focus-within{border-color:var(--brand-1);box-shadow:0 0 0 3px var(--brand-soft)}
+.mp-search-wrap .ic{width:14px;height:14px;color:var(--text-3);flex:0 0 14px}
+.mp-search{
+  flex:1;min-width:0;background:none;border:0;outline:none;
+  font-size:13px;color:var(--text);
+}
+.mp-search::placeholder{color:var(--text-3)}
+.mp-clear{
+  width:20px;height:20px;border-radius:50%;display:grid;place-items:center;
+  background:var(--surface-3);color:var(--text-3);flex:0 0 20px;
+}
+.mp-clear .ic{width:10px;height:10px}
+.mp-clear:hover{background:var(--err-soft);color:var(--err)}
+.mp-meta{
+  display:flex;gap:6px;align-items:center;
+  font-size:11px;color:var(--text-3);margin-top:7px;padding-left:2px;
+}
+.mp-dot{opacity:.5}
+.mp-list{max-height:280px;overflow-y:auto;padding:6px;overscroll-behavior:contain}
+.mp-group{
+  font-size:10px;font-weight:700;letter-spacing:.6px;text-transform:uppercase;
+  color:var(--text-3);padding:8px 8px 4px;position:sticky;top:0;
+  background:var(--surface-2);z-index:1;
+}
+.mp-item{
+  display:flex;align-items:center;gap:7px;width:100%;text-align:left;
+  padding:7px 8px;border-radius:var(--r-xs);font-size:12px;
+  color:var(--text-2);transition:background var(--fast),color var(--fast);
+}
+.mp-item:hover{background:var(--surface-3);color:var(--text)}
+.mp-item.active{background:var(--brand-soft);color:var(--brand-1);font-weight:660}
+.mp-check{width:13px;flex:0 0 13px;display:grid;place-items:center;color:var(--brand-1)}
+.mp-check .ic{width:11px;height:11px}
+.mp-id{font-family:ui-monospace,Menlo,monospace;font-size:11.5px;word-break:break-all}
+.mp-name{font-size:10.5px;color:var(--text-3);flex:0 0 auto}
+.mp-ctx{
+  margin-left:auto;flex:0 0 auto;font-size:10px;color:var(--text-3);
+  background:var(--surface-3);padding:1px 6px;border-radius:9px;
+}
+.mp-empty{padding:22px 16px;text-align:center;font-size:12px;color:var(--text-3);line-height:1.6}
+@media (max-width:520px){
+  .mp-list{max-height:220px}
+  .mp-name{display:none}
+}
 </style>
 </head>
 <body>
@@ -571,6 +629,11 @@ const State = {
   themes: [],
   currentTheme: 'minimal',
   customTheme: {},
+  aggTab: 'hot',
+  trendSince: 'daily',
+  searchQuery: '',
+  searchMode: 'bing',
+  searchResults: null,
 };
 
 const API = {
@@ -631,12 +694,13 @@ const NAV = [
   { key: 'config', label: '模型', icon: 'cpu' },
   { key: 'mail', label: '邮件', icon: 'mail' },
   { key: 'sources', label: '信息源', icon: 'globe' },
+  { key: 'aggregate', label: '聚合', icon: 'bolt' },
   { key: 'schedule', label: '定时', icon: 'clock' },
   { key: 'history', label: '历史', icon: 'history' },
   { key: 'preview', label: '预览', icon: 'eye' },
   { key: 'system', label: '系统', icon: 'settings' },
 ];
-const TAB_NAV = NAV.filter(n => ['dashboard', 'config', 'sources', 'schedule', 'system'].includes(n.key));
+const TAB_NAV = NAV.filter(n => ['dashboard', 'config', 'aggregate', 'schedule', 'system'].includes(n.key));
 
 function renderNav() {
   $('#sideNav').innerHTML = `<div class="nav-label">控制台</div>` +
@@ -660,8 +724,8 @@ async function render() {
   view.innerHTML = skeleton(5);
   const fn = {
     dashboard: pageDashboard, config: pageConfig, mail: pageMail,
-    providers: pageProviders, sources: pageSources, schedule: pageSchedule,
-    history: pageHistory, preview: pagePreview, system: pageSystem,
+    providers: pageProviders, sources: pageSources, aggregate: pageAggregate,
+    schedule: pageSchedule, history: pageHistory, preview: pagePreview, system: pageSystem,
   }[State.page];
   try {
     view.innerHTML = await fn();
@@ -691,6 +755,14 @@ function section(title, body, icon = '', right = '') {
 function field(label, control, hint) {
   return `<div class="field">
     <label class="label">${esc(label)}${hint ? `<span class="label-hint">${esc(hint)}</span>` : ''}</label>
+    ${control}
+  </div>`;
+}
+
+/** 允许 label 内含 HTML（如动态数值 span） */
+function fieldHtml(labelHtml, control, hint) {
+  return `<div class="field">
+    <label class="label">${labelHtml}${hint ? `<span class="label-hint">${esc(hint)}</span>` : ''}</label>
     ${control}
   </div>`;
 }
@@ -813,10 +885,23 @@ async function pageConfig() {
       ${field('模型', `<div style="display:flex;gap:8px">
         <input class="input mono" id="f-ai-model" value="${esc(ai.model || '')}" placeholder="留空使用默认模型">
         <button class="btn btn-secondary" data-act="loadmodels" type="button" style="flex:0 0 auto">${ic('refresh')}拉取</button>
+      </div>`, '可直接输入，也可拉取后选择')}
+      <div id="modelPicker" class="model-picker hidden">
+        <div class="mp-head">
+          <div class="mp-search-wrap">
+            ${ic('list')}
+            <input class="mp-search" id="modelSearch" placeholder="搜索模型名，例如 sn / deepseek / glm" autocomplete="off">
+            <button class="mp-clear hidden" id="modelSearchClear" type="button">${ic('close')}</button>
+          </div>
+          <div class="mp-meta">
+            <span id="modelCount">0 个模型</span>
+            <span class="mp-dot">·</span>
+            <span id="modelFiltered"></span>
+          </div>
+        </div>
+        <div class="mp-list" id="modelList"></div>
       </div>
-      <div class="chips mt-3" id="modelChips"></div>`, '留空则用提供商默认')}
-
-      ${field(`Temperature <span class="range-val" id="tempVal">${ai.temperature ?? 0.7}</span>`,
+      ${fieldHtml(`Temperature <span class="range-val" id="tempVal">${ai.temperature ?? 0.7}</span>`,
         `<input class="range" id="f-ai-temp" type="range" min="0" max="2" step="0.1" value="${ai.temperature ?? 0.7}">
          <div class="range-legend"><span>精确 0</span><span>均衡 1</span><span>创造 2</span></div>`)}
 
@@ -1383,6 +1468,133 @@ async function previewTheme(key) {
   });
 }
 
+/* ============ 模型选择器（v10.1）============ */
+/**
+ * 特性：
+ *   - 显示全部模型，不限数量（虚拟滚动上限 300 条）
+ *   - 实时搜索过滤（输入 sn 立即筛出含 sn 的模型）
+ *   - 按厂商前缀分组显示
+ *   - 当前选中的高亮并置顶
+ *   - 清空搜索按钮
+ */
+
+function modelGroupOf(id) {
+  const s = String(id || '');
+  const idx = s.indexOf('/');
+  if (idx > 0) return s.slice(0, idx);
+  return '其他';
+}
+
+function renderModelPicker() {
+  const box = $('#modelList');
+  const picker = $('#modelPicker');
+  if (!box || !picker) return;
+
+  const all = State.models || [];
+  picker.classList.remove('hidden');
+
+  const kw = ($('#modelSearch')?.value || '').trim().toLowerCase();
+  const cur = $('#f-ai-model')?.value?.trim() || State.config.ai?.model || '';
+
+  // 过滤
+  const filtered = kw
+    ? all.filter((m) => String(m.id || m.name || '').toLowerCase().indexOf(kw) >= 0)
+    : all;
+
+  // 计数
+  const cntEl = $('#modelCount');
+  if (cntEl) cntEl.textContent = all.length + ' 个模型';
+  const fEl = $('#modelFiltered');
+  if (fEl) fEl.textContent = kw ? ('匹配 ' + filtered.length + ' 个') : '';
+
+  const clearBtn = $('#modelSearchClear');
+  if (clearBtn) clearBtn.classList.toggle('hidden', !kw);
+
+  // 空状态
+  if (!all.length) {
+    box.innerHTML = `<div class="mp-empty">该提供商没有可用模型列表，可直接在上方输入模型名</div>`;
+    return;
+  }
+  if (!filtered.length) {
+    box.innerHTML = `<div class="mp-empty">没有匹配「${esc(kw)}」的模型</div>`;
+    return;
+  }
+
+  // 分组（搜索时平铺，避免分组干扰）
+  const groups = {};
+  filtered.forEach((m) => {
+    const g = kw ? '_flat' : modelGroupOf(m.id || m.name);
+    (groups[g] = groups[g] || []).push(m);
+  });
+
+  // 当前选中的置顶
+  const sortFn = (a, b) => {
+    const ai2 = (a.id || a.name) === cur ? 0 : 1;
+    const bi = (b.id || b.name) === cur ? 0 : 1;
+    if (ai2 !== bi) return ai2 - bi;
+    return String(a.id || a.name).localeCompare(String(b.id || b.name));
+  };
+
+  const groupKeys = Object.keys(groups).sort((a, b) => {
+    if (a === '_flat') return -1;
+    if (b === '_flat') return 1;
+    return a.localeCompare(b);
+  });
+
+  let count = 0;
+  const LIMIT = 300;
+  const html = groupKeys.map((g) => {
+    const items = groups[g].slice().sort(sortFn);
+    const rows = items.map((m) => {
+      if (count >= LIMIT) return '';
+      count++;
+      const id = m.id || m.name;
+      const active = id === cur;
+      const ctx = m.context ? `<span class="mp-ctx">${esc(String(m.context))}</span>` : '';
+      const nameDiff = m.name && m.name !== id ? `<span class="mp-name">${esc(m.name)}</span>` : '';
+      return `<button type="button" class="mp-item ${active ? 'active' : ''}" data-model-pick="${esc(id)}">
+        <span class="mp-check">${active ? ic('check') : ''}</span>
+        <span class="mp-id">${esc(id)}</span>
+        ${nameDiff}${ctx}
+      </button>`;
+    }).join('');
+
+    if (!rows.trim()) return '';
+    const label = g === '_flat' ? '' : `<div class="mp-group">${esc(g)}</div>`;
+    return label + rows;
+  }).join('');
+
+  box.innerHTML = html + (all.length > LIMIT
+    ? `<div class="mp-empty">仅显示前 ${LIMIT} 个，请用搜索缩小范围</div>`
+    : '');
+}
+
+/** 兼容旧调用 */
+function renderModelChips() {
+  renderModelPicker();
+}
+
+/** 选择模型 */
+function pickModel(id) {
+  const inp = $('#f-ai-model');
+  if (inp) inp.value = id;
+  State.config.ai = { ...(State.config.ai || {}), model: id };
+  $$('#modelList .mp-item').forEach((el) => {
+    const on = el.dataset.modelPick === id;
+    el.classList.toggle('active', on);
+    const chk = el.querySelector('.mp-check');
+    if (chk) chk.innerHTML = on ? ic('check') : '';
+  });
+  buzz();
+}
+
+/** 把本地缓存恢复成模型列表（切页回来时用） */
+function restoreModelPicker() {
+  if (State.models && State.models.length) {
+    renderModelPicker();
+  }
+}
+
 /* ============ 定时任务 ============ */
 const SLOTS = [
   ['morning', '早报', 'sunrise'],
@@ -1465,6 +1677,238 @@ function collectSchedule() {
     };
   }
   return { schedule, delivery, app: { autoSchedule: !!$('#f-auto')?.checked } };
+}
+
+/* ============ 聚合页：热榜 / 游戏 / 行情 / 趋势 / 搜索 ============ */
+const AGG_TABS = [
+  { key: 'hot', label: '中文热榜', icon: 'bolt' },
+  { key: 'stocks', label: '股市', icon: 'chart' },
+  { key: 'games', label: '游戏', icon: 'puzzle' },
+  { key: 'trending', label: 'GitHub', icon: 'code' },
+  { key: 'search', label: '搜索', icon: 'globe' },
+];
+
+async function pageAggregate() {
+  const tab = State.aggTab || 'hot';
+
+  const tabs = `<div class="seg" id="aggTabs" style="width:100%">
+    ${AGG_TABS.map((t) => `<button class="${tab === t.key ? 'active' : ''}" data-agg="${t.key}" style="flex:1">
+      ${ic(t.icon)}${t.label}
+    </button>`).join('')}
+  </div>`;
+
+  let body = '';
+  try {
+    if (tab === 'hot') body = await aggHot();
+    else if (tab === 'stocks') body = await aggStocks();
+    else if (tab === 'games') body = await aggGames();
+    else if (tab === 'trending') body = await aggTrending();
+    else body = aggSearch();
+  } catch (e) {
+    body = `<div class="card">${emptyState('warning', '加载失败', e.message)}</div>`;
+  }
+
+  return pageHead('聚合', '热榜 · 行情 · 游戏 · 趋势 · 搜索',
+    `<button class="btn btn-secondary btn-sm" data-act="reload">${ic('refresh')}刷新</button>`) +
+    `<div class="section">${tabs}</div>` +
+    `<div id="aggBody">${body}</div>`;
+}
+
+/* ---------- 热榜 ---------- */
+async function aggHot() {
+  const d = await API.get('/api/hotboard/items?limit=10');
+  const items = d.items || [];
+  if (!items.length) return emptyState('bolt', '暂无热榜数据', '请检查网络或稍后重试');
+
+  // 按来源分组
+  const groups = {};
+  items.forEach((it) => {
+    (groups[it.source] = groups[it.source] || []).push(it);
+  });
+
+  return Object.keys(groups).map((src) => `
+    <div class="card" style="margin-bottom:var(--s-3)">
+      <div class="card-hd">
+        <div class="card-hd-title">${esc(src)}</div>
+        <span class="badge brand">${groups[src].length}</span>
+      </div>
+      <div class="list">
+        ${groups[src].map((it, i) => `
+          <a class="list-item clickable" href="${esc(it.link || '#')}" target="_blank" rel="noopener">
+            <div class="li-av">${String(i + 1).padStart(2, '0')}</div>
+            <div class="li-main">
+              <div class="li-title">${esc(it.title)}</div>
+              ${it.summary ? `<div class="li-meta">${esc(cls(it.summary, 60))}</div>` : ''}
+            </div>
+          </a>`).join('')}
+      </div>
+    </div>`).join('');
+}
+
+/* ---------- 股市 ---------- */
+async function aggStocks() {
+  const d = await API.get('/api/stocks');
+  const items = d.items || [];
+  if (!items.length) return emptyState('chart', '暂无行情', d.error || '接口未返回数据');
+
+  return `<div class="card"><div class="list">
+    ${items.map((s) => {
+      const pct = s.pct != null ? Number(s.pct) : null;
+      const up = pct != null ? pct >= 0 : true;
+      const color = up ? 'var(--err)' : 'var(--ok)';
+      const arrow = up ? '▲' : '▼';
+      return `<div class="list-item">
+        <div class="li-main">
+          <div class="li-title">${esc(s.name)}</div>
+          <div class="li-meta mono">${esc(s.code || '')}</div>
+        </div>
+        <div style="text-align:right">
+          <div class="mono" style="font-size:15px;font-weight:700;color:var(--text)">${s.current != null ? Number(s.current).toFixed(2) : '-'}</div>
+          <div class="mono" style="font-size:11px;font-weight:700;color:${color};margin-top:2px">
+            ${arrow} ${pct != null ? (pct >= 0 ? '+' : '') + pct.toFixed(2) + '%' : '-'}
+          </div>
+        </div>
+      </div>`;
+    }).join('')}
+  </div></div>`;
+}
+
+/* ---------- 游戏 ---------- */
+async function aggGames() {
+  const [steam, epic] = await Promise.all([
+    API.get('/api/steam?limit=8').catch(() => ({ items: [] })),
+    API.get('/api/epic?limit=10').catch(() => ({ items: [] })),
+  ]);
+
+  const card = (title, data, icon, showPrice) => {
+    const items = data.items || [];
+    if (!items.length) {
+      return `<div class="card" style="margin-bottom:var(--s-3)">
+        <div class="card-hd"><div class="card-hd-title">${title}</div></div>
+        ${emptyState(icon, '暂无数据', data.error || '接口未返回')}
+      </div>`;
+    }
+    return `<div class="card" style="margin-bottom:var(--s-3)">
+      <div class="card-hd">
+        <div class="card-hd-title">${title}</div>
+        <span class="badge brand">${items.length}</span>
+      </div>
+      <div class="list">
+        ${items.map((it) => `
+          <a class="list-item clickable" href="${esc(it.link || '#')}" target="_blank" rel="noopener">
+            <div class="li-av">${ic(icon)}</div>
+            <div class="li-main">
+              <div class="li-title">${esc(it.title)}</div>
+              <div class="li-meta">${esc(it.summary || '')}</div>
+            </div>
+            ${showPrice && it.discount > 0 ? `<span class="badge err">-${it.discount}%</span>` : ''}
+          </a>`).join('')}
+      </div>
+    </div>`;
+  };
+
+  return card('Steam 特惠 / 新品 / 热销', steam, 'puzzle', true) + card('Epic 限时免费', epic, 'image', false);
+}
+
+/* ---------- GitHub Trending ---------- */
+async function aggTrending() {
+  const since = State.trendSince || 'daily';
+  const d = await API.get('/api/trending?limit=20&since=' + since);
+  const items = d.items || [];
+
+  const sinceTabs = `<div class="seg" style="margin-bottom:var(--s-3)">
+    ${[['daily', '今日'], ['weekly', '本周'], ['monthly', '本月']].map(([k, n]) =>
+      `<button class="${since === k ? 'active' : ''}" data-trend-since="${k}">${n}</button>`).join('')}
+  </div>`;
+
+  if (!items.length) return sinceTabs + emptyState('code', '暂无趋势数据', d.error || '接口未返回');
+
+  return sinceTabs + `<div class="card"><div class="list">
+    ${items.map((it, i) => `
+      <a class="list-item clickable" href="${esc(it.link || '#')}" target="_blank" rel="noopener">
+        <div class="li-av">${String(i + 1).padStart(2, '0')}</div>
+        <div class="li-main">
+          <div class="li-title mono">${esc(it.title)}</div>
+          <div class="li-meta">${esc(cls(it.summary || '', 70))}</div>
+        </div>
+      </a>`).join('')}
+  </div></div>`;
+}
+
+/* ---------- 搜索 ---------- */
+function aggSearch() {
+  const q = State.searchQuery || '';
+  const mode = State.searchMode || 'bing';
+  const results = State.searchResults || null;
+
+  const modes = [['bing', 'Bing'], ['google', 'Google'], ['baidu', '百度'], ['ai', 'AI 搜索']];
+
+  let resultHtml = emptyState('globe', '输入关键词开始搜索', '支持 Bing / Google / 百度 / 大模型搜索');
+  if (results) {
+    if (!results.length) {
+      resultHtml = emptyState('empty-box', '没有结果', '换个关键词试试，或切换搜索引擎');
+    } else {
+      resultHtml = `<div class="card"><div class="list">
+        ${results.map((it) => `
+          <a class="list-item clickable" href="${esc(it.url || '#')}" target="_blank" rel="noopener">
+            <div class="li-av">${ic('globe')}</div>
+            <div class="li-main">
+              <div class="li-title">${esc(it.title)}</div>
+              ${it.snippet ? `<div class="li-meta">${esc(cls(it.snippet, 90))}</div>` : ''}
+              ${it.source ? `<div class="li-meta"><span class="badge">${esc(it.source)}</span></div>` : ''}
+            </div>
+          </a>`).join('')}
+      </div></div>`;
+    }
+  }
+
+  return `
+    <div class="card" style="margin-bottom:var(--s-3)"><div class="card-bd">
+      <div style="display:flex;gap:8px">
+        <input class="input" id="searchInput" value="${esc(q)}" placeholder="输入关键词，回车搜索" autocomplete="off">
+        <button class="btn btn-primary" data-act="do-search" style="flex:0 0 auto">${ic('globe')}搜索</button>
+      </div>
+      <div class="chips mt-3">
+        ${modes.map(([k, n]) => `<button class="chip ${mode === k ? 'active' : ''}" data-search-mode="${k}">${n}</button>`).join('')}
+      </div>
+    </div></div>
+    <div id="searchResults">${resultHtml}</div>`;
+}
+
+async function doSearch() {
+  const q = ($('#searchInput')?.value || '').trim();
+  if (!q) return toast('请输入关键词', 'err');
+  State.searchQuery = q;
+  const box = $('#searchResults');
+  if (box) box.innerHTML = skeleton(3);
+  try {
+    busy(true);
+    const d = await API.get('/api/search?q=' + encodeURIComponent(q) + '&mode=' + (State.searchMode || 'bing') + '&limit=15');
+    busy(false);
+    State.searchResults = d.items || [];
+    if (box) box.innerHTML = aggSearchHtml();
+    toast('找到 ' + State.searchResults.length + ' 条结果', 'ok');
+  } catch (e) {
+    busy(false);
+    State.searchResults = [];
+    if (box) box.innerHTML = `<div class="card">${emptyState('warning', '搜索失败', e.message)}</div>`;
+  }
+}
+
+function aggSearchHtml() {
+  const results = State.searchResults || [];
+  if (!results.length) return emptyState('empty-box', '没有结果', '换个关键词试试');
+  return `<div class="card"><div class="list">
+    ${results.map((it) => `
+      <a class="list-item clickable" href="${esc(it.url || '#')}" target="_blank" rel="noopener">
+        <div class="li-av">${ic('globe')}</div>
+        <div class="li-main">
+          <div class="li-title">${esc(it.title)}</div>
+          ${it.snippet ? `<div class="li-meta">${esc(cls(it.snippet, 90))}</div>` : ''}
+          ${it.source ? `<div class="li-meta"><span class="badge">${esc(it.source)}</span></div>` : ''}
+        </div>
+      </a>`).join('')}
+  </div></div>`;
 }
 
 /* ============ 历史 ============ */
@@ -1717,20 +2161,6 @@ async function loadModelList(providerKey) {
   }
 }
 
-function renderModelChips() {
-  const wrap = $('#modelChips');
-  if (!wrap) return;
-  if (!State.models.length) {
-    wrap.innerHTML = '<span class="li-meta">该提供商没有可用模型列表，请手动填写模型名</span>';
-    return;
-  }
-  const cur = $('#f-ai-model')?.value;
-  wrap.innerHTML = State.models.slice(0, 16).map(m => {
-    const id = m.id || m.name;
-    return `<button class="chip ${cur === id ? 'active' : ''}" data-chip="${esc(id)}">${esc(id)}</button>`;
-  }).join('');
-}
-
 /* ============ 通用保存 ============ */
 async function savePatch(patch, okMsg) {
   try {
@@ -1887,6 +2317,7 @@ async function __oldSaveSources() {
 
 /* ---------- 信息源 v5.1 事件 ---------- */
 const SRC_ACTIONS = {
+  'do-search': () => doSearch(),
   'toggle-custom': () => {
     const el = $('#customEditor');
     if (el) el.classList.toggle('hidden');
@@ -2012,8 +2443,16 @@ function bind() {
           busy(false);
           State.models = res.models || [];
           if (res.error) toast('动态拉取失败，已回退内置列表', 'warn');
-          renderModelChips();
-          toast('已获取 ' + State.models.length + ' 个模型', 'ok');
+          renderModelPicker();
+          if (State.models.length) {
+            toast('已获取 ' + State.models.length + ' 个模型', 'ok');
+            setTimeout(() => {
+              const s = $('#modelSearch');
+              if (s) s.focus();
+            }, 100);
+          } else {
+            toast('该提供商无模型列表', 'warn');
+          }
         } catch (err) {
           busy(false);
           toast('拉取失败: ' + err.message, 'err');
@@ -2082,7 +2521,21 @@ function bind() {
       return;
     }
 
-    /* 模型 chip */
+    /* 模型选择 */
+    const mpick = e.target.closest('[data-model-pick]');
+    if (mpick) {
+      return pickModel(mpick.dataset.modelPick);
+    }
+
+    /* 清空搜索 */
+    if (e.target.closest('#modelSearchClear')) {
+      const s = $('#modelSearch');
+      if (s) s.value = '';
+      renderModelPicker();
+      return;
+    }
+
+    /* 模型 chip（旧版兼容） */
     const chip = e.target.closest('[data-chip]');
     if (chip) {
       const inp = $('#f-ai-model');
@@ -2131,6 +2584,28 @@ function bind() {
       return;
     }
 
+    /* 聚合页 Tab */
+    const aggBtn = e.target.closest('[data-agg]');
+    if (aggBtn) {
+      State.aggTab = aggBtn.dataset.agg;
+      return render();
+    }
+
+    /* 趋势周期 */
+    const tsBtn = e.target.closest('[data-trend-since]');
+    if (tsBtn) {
+      State.trendSince = tsBtn.dataset.trendSince;
+      return render();
+    }
+
+    /* 搜索模式 */
+    const smBtn = e.target.closest('[data-search-mode]');
+    if (smBtn) {
+      State.searchMode = smBtn.dataset.searchMode;
+      $$('[data-search-mode]').forEach((b) => b.classList.toggle('active', b === smBtn));
+      return;
+    }
+
     /* 时段切换 */
     const per = e.target.closest('[data-period]');
     if (per) {
@@ -2144,14 +2619,32 @@ function bind() {
     if (e.target.id === 'f-ai-temp') {
       const el = $('#tempVal');
       if (el) el.textContent = e.target.value;
+      return;
+    }
+    if (e.target.id === 'modelSearch') {
+      renderModelPicker();
+      return;
+    }
+    if (e.target.id === 'f-ai-model') {
+      renderModelPicker();
+      return;
+    }
+  });
+
+  view.addEventListener('keydown', (e) => {
+    if (e.target.id === 'searchInput' && e.key === 'Enter') {
+      e.preventDefault();
+      doSearch();
     }
   });
 
   view.addEventListener('change', (e) => {
     if (e.target.id === 'f-ai-provider') {
-      const chips = $('#modelChips');
-      if (chips) chips.innerHTML = '';
       State.models = [];
+      const picker = $('#modelPicker');
+      if (picker) picker.classList.add('hidden');
+      const ms = $('#modelSearch');
+      if (ms) ms.value = '';
       const base = $('#f-ai-baseUrl');
       if (base) base.placeholder = e.target.value === 'custom' ? 'https://your-api.com/v1' : '留空使用官方地址';
     }
