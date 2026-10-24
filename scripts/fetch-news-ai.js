@@ -406,15 +406,55 @@ const EXTRA_SOURCES = [
 
 async function fetchExtraNewsContext() {
   const allItems = [];
+
+  // ── A) RSS 订阅源（内置目录 + 用户自定义，优先）──
+  try {
+    const rssFetcher = require('./rss-fetcher');
+    const store = getStore();
+    const srcCfg = (store && store.get('sources')) || {};
+    const userRss = Array.isArray(srcCfg.rss) ? srcCfg.rss.filter((s) => s && s.enabled !== false && s.url) : [];
+
+    if (srcCfg.enableRss !== false && userRss.length) {
+      console.log(`  ⏳ RSS 订阅源: ${userRss.length} 个...`);
+      const t0 = Date.now();
+      const results = await rssFetcher.fetchAll(userRss, { concurrency: 8, limit: 8, timeout: 15000 });
+      const agg = rssFetcher.aggregate(results, { limit: 20 });
+
+      // 按源分组塞进 boards
+      for (const r of results) {
+        if (!r.error && r.items.length) {
+          allItems.push({
+            source: r.name,
+            category: r.category,
+            items: r.items.map((it, i) => ({
+              raw_title: it.title,
+              raw_desc: it.summary || '',
+              hot: 10 - Math.min(i, 9),
+              rank: i + 1,
+              url: it.link,
+              source: r.name,
+              updateTime: it.publishedAt || new Date().toISOString(),
+            })),
+          });
+        }
+      }
+
+      const okCount = results.filter((r) => !r.error && r.items.length).length;
+      console.log(`  ✓ RSS: ${okCount}/${results.length} 成功，去重后 ${agg.total} 条，耗时 ${((Date.now() - t0) / 1000).toFixed(1)}s`);
+      return allItems; // RSS 已足够，沿用旧逻辑会重复
+    }
+  } catch (e) {
+    console.log(`  ⚠ RSS 引擎不可用: ${e.message}`);
+  }
+
+  // ── B) 旧版 EXTRA_SOURCES（无 RSS 配置时回退）──
   for (const src of EXTRA_SOURCES) {
     try {
       let items = [];
       if (src.fetch) {
-        // 使用 fetch 函数（GitHub Trending / Product Hunt / HN）
         console.log(`  ⏳ ${src.name}: API 获取中...`);
         items = await src.fetch();
       } else if (src.url) {
-        // 使用 URL + HTML 解析
         const controller = new AbortController();
         const to = setTimeout(() => controller.abort(), 10000);
         const res = await fetch(src.url, { signal: controller.signal, headers: { 'User-Agent': 'Mozilla/5.0' } });
