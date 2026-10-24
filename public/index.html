@@ -441,6 +441,25 @@ textarea.input{height:auto;min-height:84px;padding:11px var(--s-3);resize:vertic
   .theme-grid{grid-template-columns:1fr}
   .theme-preview{min-height:64px}
 }
+
+/* ---------- 主题分组 / 自定义编辑器 ---------- */
+.theme-group{margin-bottom:18px}
+.theme-group:last-of-type{margin-bottom:6px}
+.theme-group-label{font-size:11px;font-weight:700;letter-spacing:.8px;color:var(--text-3);text-transform:uppercase;margin-bottom:9px}
+.theme-dot{display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:7px;vertical-align:middle}
+.custom-editor{border-top:1px dashed var(--line);padding-top:16px;margin-top:14px}
+.cf-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:var(--s-3);margin-top:8px}
+.cf{min-width:0}
+.cf-label{font-size:11px;color:var(--text-3);font-weight:600;margin-bottom:5px;display:block}
+.cf-input{display:flex;gap:6px;align-items:center}
+.cf-color{width:36px;height:36px;flex:0 0 36px;border-radius:9px;border:1px solid var(--line-strong);background:transparent;cursor:pointer;padding:2px}
+.cf-color::-webkit-color-swatch-wrapper{padding:0}
+.cf-color::-webkit-color-swatch{border:none;border-radius:6px}
+.cf-hex{flex:1;min-width:0;height:36px;font-family:ui-monospace,Menlo,monospace;font-size:12px;text-transform:uppercase}
+.cf-hint{font-size:10px;color:var(--text-3);margin-top:3px}
+@media (max-width:520px){
+  .cf-grid{grid-template-columns:1fr}
+}
 </style>
 </head>
 <body>
@@ -549,6 +568,9 @@ const State = {
   catalog: [],
   categories: {},
   engines: {},
+  themes: [],
+  currentTheme: 'minimal',
+  customTheme: {},
 };
 
 const API = {
@@ -853,28 +875,8 @@ async function pageMail() {
       ${field('收件邮箱', `<input class="input" id="f-mail-to" type="email" value="${esc(m.to || '')}" placeholder="留空则发给自己">`, '可多个，逗号分隔')}
       ${field('发件人显示名 / 地址', `<input class="input" id="f-mail-from" value="${esc(m.from || '')}" placeholder="留空使用发件邮箱">`)}
     </div></div>`, 'mail') +
-    section('邮件主题', `<div class="card"><div class="card-bd">
-      <div class="li-meta" style="margin-bottom:14px">选择每日邮件的视觉风格，保存后下一封邮件生效。</div>
-      <div class="theme-grid" id="themeGrid">
-        ${[
-          { k: 'minimal', n: '极简白', d: '渐变紫 + 纯白卡片', bg: '#F5F7FC', card: '#FFFFFF', ink: '#0F172A', g: 'linear-gradient(135deg,#6366F1,#8B5CF6,#A855F7)' },
-          { k: 'dark', n: '墨黑', d: '深灰底 + 暖白字', bg: '#0B0F1A', card: '#151C2C', ink: '#F1F5F9', g: 'linear-gradient(135deg,#818CF8,#A78BFA,#C084FC)' },
-          { k: 'paper', n: '报刊', d: '米色底 + 衬线体', bg: '#FAF7F0', card: '#FFFDF8', ink: '#2B2118', g: 'linear-gradient(135deg,#8B4513,#A0522D,#B8860B)' },
-        ].map((t) => `
-          <button class="theme-card ${(m.theme || 'minimal') === t.k ? 'active' : ''}" data-theme="${t.k}">
-            <div class="theme-preview" style="background:${t.bg}">
-              <div class="theme-hero" style="background:${t.g}"></div>
-              <div class="theme-bar" style="background:${t.card}"></div>
-              <div class="theme-bar short" style="background:${t.card}"></div>
-              <div class="theme-line" style="background:${t.card}"></div>
-            </div>
-            <div class="theme-name">${t.n}</div>
-            <div class="theme-desc">${t.d}</div>
-          </button>`).join('')}
-      </div>
-      <input type="hidden" id="f-mail-theme" value="${esc(m.theme || 'minimal')}">
-    </div></div>`, 'image') +
-    section('SMTP 高级（仅自定义）', `<div class="card"><div class="card-bd ${isCustom ? '' : 'hidden'}" id="smtpBox">
+    await buildThemeSection(m) +
+            section('SMTP 高级（仅自定义）', `<div class="card"><div class="card-bd ${isCustom ? '' : 'hidden'}" id="smtpBox">
       <div class="form-row">
         ${field('SMTP 服务器', `<input class="input mono" id="f-mail-smtpHost" value="${esc(m.smtpHost || '')}" placeholder="smtp.example.com">`)}
         ${field('端口', `<input class="input" id="f-mail-smtpPort" type="number" min="0" max="65535" value="${m.smtpPort || 465}">`)}
@@ -1168,6 +1170,217 @@ async function fetchPreview() {
     busy(false);
     toast('抓取失败: ' + e.message, 'err');
   }
+}
+
+/* ============ 邮件主题选择（v9：10 套 + 自定义）============ */
+async function buildThemeSection(m) {
+  let data;
+  try {
+    data = await API.get('/api/themes');
+  } catch (e) {
+    return section('邮件主题', `<div class="card">${emptyState('warning', '主题加载失败', e.message)}</div>`, 'image');
+  }
+
+  State.themes = data.themes || [];
+  State.currentTheme = data.current || 'minimal';
+  State.customTheme = data.customTheme || {};
+
+  const groups = {};
+  State.themes.forEach((t) => {
+    (groups[t.group] = groups[t.group] || []).push(t);
+  });
+
+  const groupHtml = Object.keys(groups).map((g) => `
+    <div class="theme-group">
+      <div class="theme-group-label">${esc(g)}</div>
+      <div class="theme-grid">
+        ${groups[g].map((t) => `
+          <button class="theme-card ${State.currentTheme === t.key ? 'active' : ''}" data-theme="${esc(t.key)}">
+            <div class="theme-preview" style="background:${t.preview.bg}">
+              <div class="theme-hero" style="background:${t.preview.gradient}"></div>
+              <div class="theme-bar" style="background:${t.preview.card}"></div>
+              <div class="theme-bar short" style="background:${t.preview.card}"></div>
+              <div class="theme-line" style="background:${t.preview.card}"></div>
+            </div>
+            <div class="theme-name">
+              <span class="theme-dot" style="background:${t.preview.accent}"></span>${esc(t.name)}
+            </div>
+            <div class="theme-desc">${esc(t.desc)}</div>
+          </button>`).join('')}
+      </div>
+    </div>`).join('');
+
+  // 自定义主题卡片
+  const ct = State.customTheme;
+  const customCard = `
+    <div class="theme-group">
+      <div class="theme-group-label">自定义</div>
+      <div class="theme-grid">
+        <button class="theme-card ${State.currentTheme === 'custom' ? 'active' : ''}" data-theme="custom">
+          <div class="theme-preview" style="background:${ct.bg || '#F5F7FC'}">
+            <div class="theme-hero" style="background:linear-gradient(135deg,${ct.brand1 || '#6366F1'},${ct.brand2 || '#8B5CF6'},${ct.brand3 || '#A855F7'})"></div>
+            <div class="theme-bar" style="background:${ct.card || '#FFFFFF'}"></div>
+            <div class="theme-bar short" style="background:${ct.card || '#FFFFFF'}"></div>
+            <div class="theme-line" style="background:${ct.card || '#FFFFFF'}"></div>
+          </div>
+          <div class="theme-name">
+            <span class="theme-dot" style="background:${ct.accent || '#6366F1'}"></span>${esc(ct.name || '我的主题')}
+          </div>
+          <div class="theme-desc">自定义配色，可调 12 种颜色</div>
+        </button>
+      </div>
+    </div>`;
+
+  return section('邮件主题', `<div class="card"><div class="card-bd">
+    <div class="li-meta" style="margin-bottom:16px">
+      共 ${State.themes.length} 套预设 + 自定义。选中后点下方「保存配置」生效。
+    </div>
+    ${groupHtml}
+    ${customCard}
+
+    <div class="divider"></div>
+
+    <div class="flex items-center justify-between" style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+      <div class="label" style="margin:0">自定义配色编辑器</div>
+      <button class="btn btn-sm btn-ghost" data-act="toggle-custom">${ic('settings')}展开/收起</button>
+    </div>
+
+    <div id="customEditor" class="custom-editor hidden">
+      ${customEditorHtml(ct)}
+      <div class="mt-4" style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn btn-secondary btn-sm" data-act="preview-theme" data-theme="custom">${ic('eye')}预览当前主题</button>
+        <button class="btn btn-ghost btn-sm" data-act="reset-custom">${ic('refresh')}恢复默认</button>
+      </div>
+    </div>
+
+    <div class="mt-4" style="display:flex;gap:8px">
+      <button class="btn btn-secondary btn-sm" data-act="preview-theme" data-theme="${esc(State.currentTheme)}">${ic('eye')}预览选中主题</button>
+    </div>
+  </div></div>`, 'image');
+}
+
+function customEditorHtml(ct) {
+  const colorField = (id, label, val, hint) => `
+    <div class="cf">
+      <label class="cf-label">${esc(label)}</label>
+      <div class="cf-input">
+        <input type="color" class="cf-color" id="ct-${id}" value="${esc(val || '#000000')}">
+        <input type="text" class="input cf-hex" id="ct-${id}-hex" value="${esc(val || '#000000')}" maxlength="7" spellcheck="false">
+      </div>
+      ${hint ? `<div class="cf-hint">${esc(hint)}</div>` : ''}
+    </div>`;
+
+  return `
+    <div class="field">
+      <label class="label">主题名称</label>
+      <input class="input" id="ct-name" value="${esc(ct.name || '我的主题')}" maxlength="20" placeholder="给主题取个名字">
+    </div>
+
+    <div class="field">
+      <label class="label">字体</label>
+      <select class="select" id="ct-font">
+        ${opt('sans', '无衬线（现代）', ct.fontFamily)}
+        ${opt('serif', '衬线（报刊感）', ct.fontFamily)}
+        ${opt('round', '圆体（柔和）', ct.fontFamily)}
+      </select>
+    </div>
+
+    <div class="label" style="margin-top:16px">品牌渐变（头部）</div>
+    <div class="cf-grid">
+      ${colorField('brand1', '起始色', ct.brand1)}
+      ${colorField('brand2', '中间色', ct.brand2)}
+      ${colorField('brand3', '结束色', ct.brand3)}
+    </div>
+
+    <div class="label" style="margin-top:16px">背景与卡片</div>
+    <div class="cf-grid">
+      ${colorField('bg', '页面背景', ct.bg)}
+      ${colorField('card', '卡片背景', ct.card)}
+      ${colorField('cardBorder', '卡片边框', ct.cardBorder)}
+      ${colorField('line', '分隔线', ct.line)}
+    </div>
+
+    <div class="label" style="margin-top:16px">文字层级</div>
+    <div class="cf-grid">
+      ${colorField('ink', '主标题', ct.ink)}
+      ${colorField('ink2', '正文', ct.ink2)}
+      ${colorField('ink3', '次要文字', ct.ink3)}
+      ${colorField('ink4', '辅助文字', ct.ink4)}
+    </div>
+
+    <div class="label" style="margin-top:16px">强调色</div>
+    <div class="cf-grid">
+      ${colorField('accent', '强调色', ct.accent, '用于圆点、链接')}
+      ${colorField('footerText', '页脚文字', ct.footerText)}
+    </div>
+
+    <div class="label" style="margin-top:16px">TL;DR 卡片</div>
+    <div class="cf-grid">
+      ${colorField('tlrdBg', '背景', ct.tlrdBg)}
+      ${colorField('tlrdBd', '边框', ct.tlrdBd)}
+      ${colorField('tlrdTx', '正文', ct.tlrdTx)}
+      ${colorField('tlrdLb', '标签', ct.tlrdLb)}
+    </div>`;
+}
+
+function collectCustomTheme() {
+  const g = (id) => $('#' + id)?.value?.trim?.() ?? '';
+  const out = {
+    name: g('ct-name') || '我的主题',
+    fontFamily: g('ct-font') || 'sans',
+  };
+  ['brand1', 'brand2', 'brand3', 'bg', 'card', 'cardBorder', 'line',
+   'ink', 'ink2', 'ink3', 'ink4', 'accent', 'footerText',
+   'tlrdBg', 'tlrdBd', 'tlrdTx', 'tlrdLb'].forEach((k) => {
+    out[k] = g('ct-' + k) || g('ct-' + k + '-hex');
+  });
+  return out;
+}
+
+async function previewTheme(key) {
+  const themeKey = key || State.currentTheme || 'minimal';
+  let url = '/api/themes/preview?theme=' + encodeURIComponent(themeKey);
+
+  // 自定义主题先保存再预览
+  if (themeKey === 'custom') {
+    const ct = collectCustomTheme();
+    try {
+      await API.post('/api/config', { mail: { theme: 'custom', customTheme: ct } });
+      State.customTheme = ct;
+    } catch (e) { /* 继续预览 */ }
+    url += '&t=' + Date.now();
+  }
+
+  const mask = document.createElement('div');
+  mask.className = 'modal-mask';
+  mask.innerHTML = `<div class="modal" style="max-width:460px;max-height:88vh;display:flex;flex-direction:column">
+    <div class="modal-hd" style="padding-bottom:12px">
+      <div class="modal-title">主题预览</div>
+      <div class="modal-desc">${esc(themeKey === 'custom' ? '自定义主题' : themeKey)}</div>
+    </div>
+    <div style="flex:1;overflow:auto;padding:0 12px 12px">
+      <iframe src="${url}" style="width:100%;height:520px;border:1px solid var(--line);border-radius:12px;background:#fff"></iframe>
+    </div>
+    <div class="modal-ft">
+      <button class="btn btn-secondary" data-no>关闭</button>
+      <button class="btn btn-primary" data-pick="${esc(themeKey)}">使用此主题</button>
+    </div>
+  </div>`;
+  document.body.appendChild(mask);
+
+  mask.addEventListener('click', async (e) => {
+    if (e.target === mask || e.target.closest('[data-no]')) mask.remove();
+    const pick = e.target.closest('[data-pick]');
+    if (pick) {
+      const k = pick.dataset.pick;
+      $$('.theme-card').forEach((c) => c.classList.toggle('active', c.dataset.theme === k));
+      const hidden = $('#f-mail-theme');
+      if (hidden) hidden.value = k;
+      if (k === 'custom') State.customTheme = collectCustomTheme();
+      mask.remove();
+      toast('已选择 ' + k + '，记得点保存', 'ok');
+    }
+  });
 }
 
 /* ============ 定时任务 ============ */
@@ -1674,6 +1887,30 @@ async function __oldSaveSources() {
 
 /* ---------- 信息源 v5.1 事件 ---------- */
 const SRC_ACTIONS = {
+  'toggle-custom': () => {
+    const el = $('#customEditor');
+    if (el) el.classList.toggle('hidden');
+  },
+  'preview-theme': (el) => previewTheme(el.dataset.theme || State.currentTheme),
+  'reset-custom': async () => {
+    try {
+      busy(true);
+      const r = await API.post('/api/config', { mail: { customTheme: null } });
+      busy(false);
+      const d = await API.get('/api/themes');
+      State.customTheme = d.customTheme;
+      toast('已恢复默认配色', 'ok');
+      render();
+    } catch (e) { busy(false); toast('重置失败: ' + e.message, 'err'); }
+  },
+  'save-mail': () => {
+    const patch = collectMail();
+    // 若当前选中自定义主题，一并提交配色
+    if (patch.mail.theme === 'custom') {
+      patch.mail.customTheme = collectCustomTheme();
+    }
+    return savePatch(patch, '邮件配置已保存');
+  },
   'import-recommended': () => importSources('recommended', { perCategory: 2 }),
   'import-all': () => importSources('all'),
   'import-cat': (el) => importSources('category', { category: el.dataset.cat }),
@@ -1731,7 +1968,6 @@ function bind() {
       if (a === 'reload') { toast('已刷新', 'info'); return render(); }
       if (a === 'fetch') return doFetch();
       if (a === 'save-ai') return savePatch(collectAI(), 'AI 配置已保存');
-      if (a === 'save-mail') return savePatch(collectMail(), '邮件配置已保存');
       if (a === 'save-schedule') return savePatch(collectSchedule(), '定时设置已保存');
       if (a === 'save-sources') return saveSources();
       if (a === 'save-app') {

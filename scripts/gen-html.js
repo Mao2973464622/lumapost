@@ -41,49 +41,18 @@ function parseArgs() {
 }
 
 /* ============================================================
-   主题系统
+   主题系统（外置到 mail-themes.js）
    ============================================================ */
-const THEMES = {
-  minimal: {
-    key: 'minimal',
-    name: '极简白',
-    desc: '渐变紫 + 纯白卡片，清爽现代',
-    brand1: '#6366F1', brand2: '#8B5CF6', brand3: '#A855F7',
-    ink: '#0F172A', ink2: '#334155', ink3: '#64748B', ink4: '#94A3B8',
-    line: '#E8ECF3', bg: '#F5F7FC', card: '#FFFFFF', cardBorder: '#E8ECF3',
-    footerText: '#94A3B8',
-    font: "-apple-system,BlinkMacSystemFont,'PingFang SC','Hiragino Sans GB','Microsoft YaHei','Helvetica Neue',Arial,sans-serif",
-    titleFont: "-apple-system,BlinkMacSystemFont,'PingFang SC','Microsoft YaHei',sans-serif",
-  },
-  dark: {
-    key: 'dark',
-    name: '墨黑',
-    desc: '深灰底 + 暖白字，适合夜间阅读',
-    brand1: '#818CF8', brand2: '#A78BFA', brand3: '#C084FC',
-    ink: '#F1F5F9', ink2: '#CBD5E1', ink3: '#94A3B8', ink4: '#64748B',
-    line: '#1E293B', bg: '#0B0F1A', card: '#151C2C', cardBorder: '#232D42',
-    footerText: '#64748B',
-    font: "-apple-system,BlinkMacSystemFont,'PingFang SC','Hiragino Sans GB','Microsoft YaHei','Helvetica Neue',Arial,sans-serif",
-    titleFont: "-apple-system,BlinkMacSystemFont,'PingFang SC','Microsoft YaHei',sans-serif",
-  },
-  paper: {
-    key: 'paper',
-    name: '报刊',
-    desc: '米色底 + 衬线体，传统报纸质感',
-    brand1: '#8B4513', brand2: '#A0522D', brand3: '#B8860B',
-    ink: '#2B2118', ink2: '#4A3F35', ink3: '#7A6D5F', ink4: '#A89888',
-    line: '#E0D8CC', bg: '#FAF7F0', card: '#FFFDF8', cardBorder: '#E8DFD2',
-    footerText: '#A89888',
-    font: "Georgia,'Songti SC','STSong','SimSun',serif",
-    titleFont: "Georgia,'Songti SC','STSong','SimSun',serif",
-  },
-};
+let themes = { THEMES: {}, resolveTheme: null, listThemes: null, defaultCustom: null, DEFAULT_THEME: 'minimal' };
+try { themes = require('./mail-themes'); } catch (e) { /* 降级 */ }
 
-function resolveTheme(key) {
-  return THEMES[key] || THEMES.minimal;
+const THEMES = themes.THEMES || {};
+function resolveTheme(key, custom) {
+  if (typeof themes.resolveTheme === 'function') return themes.resolveTheme(key, custom);
+  return THEMES[key] || THEMES.minimal || {};
 }
 
-let T = THEMES.minimal;   // 运行时覆盖
+let T = THEMES.minimal || {};   // 运行时覆盖
 
 /* ============================================================
    版块主题色
@@ -433,8 +402,8 @@ function footer(data) {
 /* ============================================================
    主模板
    ============================================================ */
-function generateHTML(data, themeKey) {
-  T = resolveTheme(themeKey || CONFIG.theme || 'minimal');
+function generateHTML(data, themeKey, customTheme) {
+  T = resolveTheme(themeKey || CONFIG.theme || 'minimal', customTheme);
   const secs = (data.sections || []).filter((s) => (s.items || []).length > 0);
 
   return `<!DOCTYPE html>
@@ -472,9 +441,15 @@ function main() {
     try { themeKey = store.get('mail.theme'); } catch (e) { /* noop */ }
   }
 
+  // 自定义主题配置
+  let customTheme = null;
+  if (store) {
+    try { customTheme = store.get('mail.customTheme'); } catch (e) { customTheme = null; }
+  }
+
   const raw = fs.readFileSync(path.resolve(CONFIG.dataFile), 'utf8');
   const data = JSON.parse(raw);
-  const html = generateHTML(data, themeKey);
+  const html = generateHTML(data, themeKey, customTheme);
   const out = path.resolve(CONFIG.outputFile);
   const dir = path.dirname(out);
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
@@ -492,4 +467,4 @@ function main() {
 
 if (require.main === module) main();
 
-module.exports = { generateHTML, THEMES, resolveTheme };
+module.exports = { generateHTML, THEMES, resolveTheme, listThemes: themes.listThemes, defaultCustom: themes.defaultCustom };

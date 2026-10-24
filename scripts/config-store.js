@@ -17,7 +17,7 @@ const CONFIG_DIR = path.join(ROOT, 'config');
 const CONFIG_FILE = path.join(CONFIG_DIR, 'app.json');
 
 const DEFAULT_CONFIG = {
-  version: '8.0.0',
+  version: '9.0.0',
 
   ai: {
     provider: 'deepseek',
@@ -38,7 +38,16 @@ const DEFAULT_CONFIG = {
     smtpHost: '',
     smtpPort: 0,
     smtpSecure: true,
-    theme: 'minimal',   // minimal | dark | paper
+    theme: 'minimal',   // 10 套预设之一，或 'custom'
+    customTheme: {
+      name: '我的主题',
+      brand1: '#6366F1', brand2: '#8B5CF6', brand3: '#A855F7',
+      bg: '#F5F7FC', card: '#FFFFFF', cardBorder: '#E8ECF3',
+      ink: '#0F172A', ink2: '#334155', ink3: '#64748B', ink4: '#94A3B8',
+      line: '#E8ECF3', accent: '#6366F1', footerText: '#94A3B8',
+      fontFamily: 'sans',
+      tlrdBg: '#FFFBEB', tlrdBd: '#FDE68A', tlrdTx: '#78350F', tlrdLb: '#B45309',
+    },
   },
 
   weather: { lat: '28.20', lon: '112.97', city: '湖南长沙' },

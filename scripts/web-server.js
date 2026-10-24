@@ -107,6 +107,8 @@ function sanitizeConfig(input) {
   }
 
   if (input.mail && typeof input.mail === 'object') {
+    const THEME_KEYS = ['minimal', 'dark', 'paper', 'ocean', 'neon', 'forest', 'sunset', 'sakura', 'aurora', 'mono', 'custom'];
+    const themeVal = str(input.mail.theme);
     out.mail = {
       provider: str(input.mail.provider, 40).toLowerCase() || 'qq',
       user: str(input.mail.user, 200),
@@ -116,8 +118,36 @@ function sanitizeConfig(input) {
       smtpHost: str(input.mail.smtpHost, 200),
       smtpPort: num(input.mail.smtpPort, 0, 0, 65535),
       smtpSecure: bool(input.mail.smtpSecure, true),
-      theme: ['minimal', 'dark', 'paper'].indexOf(str(input.mail.theme)) >= 0 ? str(input.mail.theme) : 'minimal',
+      theme: THEME_KEYS.indexOf(themeVal) >= 0 ? themeVal : 'minimal',
     };
+
+    // 自定义主题：只接受合法 hex 颜色
+    if (input.mail.customTheme && typeof input.mail.customTheme === 'object') {
+      const ct = input.mail.customTheme;
+      const hex = (v, def) => (/^#[0-9A-Fa-f]{6}$/.test(String(v || '')) ? String(v) : def);
+      const fonts = ['sans', 'serif', 'round'];
+      out.mail.customTheme = {
+        name: str(ct.name, 20) || '我的主题',
+        brand1: hex(ct.brand1, '#6366F1'),
+        brand2: hex(ct.brand2, '#8B5CF6'),
+        brand3: hex(ct.brand3, '#A855F7'),
+        bg: hex(ct.bg, '#F5F7FC'),
+        card: hex(ct.card, '#FFFFFF'),
+        cardBorder: hex(ct.cardBorder, '#E8ECF3'),
+        ink: hex(ct.ink, '#0F172A'),
+        ink2: hex(ct.ink2, '#334155'),
+        ink3: hex(ct.ink3, '#64748B'),
+        ink4: hex(ct.ink4, '#94A3B8'),
+        line: hex(ct.line, '#E8ECF3'),
+        accent: hex(ct.accent, '#6366F1'),
+        footerText: hex(ct.footerText, '#94A3B8'),
+        fontFamily: fonts.indexOf(str(ct.fontFamily)) >= 0 ? str(ct.fontFamily) : 'sans',
+        tlrdBg: hex(ct.tlrdBg, '#FFFBEB'),
+        tlrdBd: hex(ct.tlrdBd, '#FDE68A'),
+        tlrdTx: hex(ct.tlrdTx, '#78350F'),
+        tlrdLb: hex(ct.tlrdLb, '#B45309'),
+      };
+    }
   }
 
   if (input.weather && typeof input.weather === 'object') {
@@ -639,6 +669,58 @@ async function handleAPI(req, res) {
         });
         return sendJSON(res, { count: r.items.length, items: r.items, error: r.error || null });
       } catch (e) { return sendError(res, e.message); }
+    }
+
+    /* ---- 邮件主题 ---- */
+    if (p === '/api/themes' && m === 'GET') {
+      let mth;
+      try { mth = require('./mail-themes'); } catch (e) { return sendError(res, e.message); }
+      const cfg = configStore.getAll();
+      return sendJSON(res, {
+        themes: mth.listThemes(),
+        current: (cfg.mail && cfg.mail.theme) || mth.DEFAULT_THEME,
+        customTheme: (cfg.mail && cfg.mail.customTheme) || mth.defaultCustom(),
+        fonts: ['sans', 'serif', 'round'],
+      });
+    }
+
+    /* ---- 主题预览（返回 HTML 片段，供 iframe 渲染）--- */
+    if (p === '/api/themes/preview' && m === 'GET') {
+      const themeKey = String(u.query.theme || 'minimal');
+      let gen, mth, cfg;
+      try {
+        gen = require('./gen-html');
+        mth = require('./mail-themes');
+        cfg = configStore.getAll();
+      } catch (e) { return sendError(res, e.message); }
+
+      const sample = {
+        date: new Date().toLocaleDateString('zh-CN'),
+        greeting: '早上好，这是一份主题预览',
+        weather: { location: '湖南长沙', text: '晴', temp: '22°C' },
+        tldr: '这是 TL;DR 摘要区域的样式预览，用于展示主题的强调色搭配效果。',
+        dailyQuote: '把复杂留给系统，把清晰留给读者。',
+        sections: [
+          {
+            key: 'ai', name: 'AI 智能体',
+            items: [
+              { title: '示例新闻标题一', summary: '这里是摘要文字的样式预览，展示正文的可读性与行距表现。', quicknote: '快评样式预览', source: '示例来源', stars: 4, url: '#' },
+              { title: '示例新闻标题二', summary: '第二条摘要，用于观察卡片之间的间距与层次关系。', source: '示例来源', stars: 3, url: '#' },
+            ],
+          },
+          {
+            key: 'finance', name: '理财财经',
+            items: [
+              { title: '示例财经标题', summary: '不同版块使用不同主题色，这里展示第二种版块配色。', quicknote: '版块配色预览', source: '示例来源', stars: 5, url: '#' },
+            ],
+          },
+        ],
+      };
+
+      const custom = (themeKey === 'custom') ? cfg.mail.customTheme : null;
+      const html = gen.generateHTML(sample, themeKey, custom);
+      res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' });
+      return res.end(html);
     }
 
     return sendError(res, 'API 不存在: ' + p, 404);

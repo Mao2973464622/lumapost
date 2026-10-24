@@ -1,277 +1,289 @@
-# 📰 LumaPost · 光影邮报
+# LumaPost · 光影邮报
 
-> 🤖 **AI 驱动的智能新闻邮件系统** — 每日 4 次自动推送 · 22+ AI 模型 · 14+ 邮件服务 · 零 API 费用方案
+> AI 驱动的智能新闻邮件系统 — 175 个信息源 · 13 个中文热榜 · 10 套邮件主题 · 本地 Web UI 管理后台
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-4.0.0-blue?style=flat-square" alt="Version 4.0.0">
-  <img src="https://img.shields.io/badge/node-%3E%3D18-brightgreen?style=flat-square" alt="Node >= 18">
+  <img src="https://img.shields.io/badge/version-9.0.0-6366F1?style=flat-square" alt="Version 9.0.0">
+  <img src="https://img.shields.io/badge/node-%3E%3D20-brightgreen?style=flat-square" alt="Node >= 20">
   <img src="https://img.shields.io/github/license/Mao2973464622/lumapost?style=flat-square" alt="License MIT">
-  <img src="https://img.shields.io/badge/PRs-welcome-orange?style=flat-square" alt="PRs Welcome">
+  <img src="https://img.shields.io/badge/deps-2-blue?style=flat-square" alt="2 Dependencies">
   <img src="https://img.shields.io/github/stars/Mao2973464622/lumapost?style=flat-square&color=yellow" alt="GitHub Stars">
 </p>
 
 ---
 
-## 📬 邮件预览
+## 这是什么
 
-| 早报 🌅 | 午报 ☀️ | 午后速递 🌇 | 晚间总结 🌙 |
-|:------:|:------:|:---------:|:---------:|
-| 紫蓝渐变头部 | 粉红渐变头部 | 蓝青渐变头部 | 深蓝渐变头部 |
-| 隔夜大事回顾 | 上午行情速递 | 午后新品发布 | 全天深度复盘 |
-| ⚡ TL;DR + 📈 股市 | ⚡ TL;DR + 📈 股市 | ⚡ TL;DR + 📈 股市 | ⚡ TL;DR + 📈 股市 |
+一句话：**每天早上自动给你发一封排版精美的 AI 新闻邮件**。
 
-每封邮件包含：**TOP 3 头条**（带 AI 主编 300-500 字深度解读）→ **10 大版块**（星级评分 + 快评 + AI 解析）→ **📈 趋势解读** → **💬 每日一句**
+它会从 175 个 RSS 源和 13 个中文热榜抓取新闻，交给 AI 分类整理、写摘要和快评，生成 HTML 邮件，通过 SMTP 或 API 投递到你的邮箱。
+
+全部本地运行，配置存在一个 JSON 文件里，不依赖任何云服务。
 
 ---
 
-## ✨ 核心特性
+## 核心能力
 
-| | 特性 | 说明 |
-|:---:|------|------|
-| 🤖 | **22+ AI 模型** | DeepSeek / MiniMax / OpenAI / Claude / 通义千问 / 智谱 / 豆包 / Kimi / 阶跃星辰 / 腾讯混元 / 华为盘古 / Groq / 硅基流动 等 |
-| 📮 | **14+ 邮件服务** | QQ邮箱 / 网易163/126/yeah / Gmail / Outlook / Yahoo / 阿里云 / Resend / SendGrid / Mailgun / Postmark / Microsoft Graph |
-| 🌐 | **22 个信息源** | 知乎/微博/百度/头条/B站/抖音/36氪/虎扑/贴吧/V2EX/IT之家/掘金/快手/少数派 + AIbase/AI-Bot/猫目/CNMO科技/数码闲聊站 + GitHub Trending/Product Hunt/Hacker News |
-| 📊 | **10 大版块** | AI·智能体 / 硬件·数码 / 全球创意·开源 / 国内外新闻 / 游戏·动漫 / 理财·财经 / 汽车·新能源 / 互联网大厂 / 影视·生活·科技 / 科学·航天·健康 |
-| ☁️ | **云端部署** | GitHub Actions 免费运行，电脑关机也能发 |
-| 🆓 | **零费用方案** | Google Gemini / 通义千问免费额度 / Groq 免费额度均可使用 |
-| 🎨 | **精美 HTML** | 响应式邮件设计 · 4 时段渐变配色 · 星级评分 · AI 深度解读 |
+### 信息采集
 
----
+| 类型 | 数量 | 说明 |
+|------|------|------|
+| RSS 信息源 | **175 个** | 17 个领域，逐个实测可用 |
+| 中文热榜 | **13 个平台** | 掘金 / CSDN / V2EX / 知乎 / 微博 / 抖音 / B站 / 贴吧 / 36氪 / 少数派 / IT之家 / 澎湃 / 头条 |
+| 搜索引擎 | 4 个 | Bing（默认）/ Google / 百度 / DuckDuckGo |
+| AI 搜索 | 可选 | 用大模型直接生成结构化搜索结果 |
+| 游戏特惠 | 2 个 | Steam 特惠榜 / Epic 限时免费 |
+| 代码趋势 | 1 个 | GitHub Trending |
 
-## 🎯 为什么选择 LumaPost？
+### AI 编排
 
-| 对比项 | LumaPost | 传统 RSS 邮件 | 商业新闻聚合 |
-|--------|----------|-------------|------------|
-| 💰 价格 | **完全免费** | 免费 | ¥99+/月 |
-| 🧠 AI 深度解读 | ✅ **每条新闻都有** | ❌ 无 | ❌ 无 |
-| 🔍 信息源 | **22 个** | 自定义有限 | 固定 |
-| 🤖 AI 模型 | **22+ 种可选** | ❌ | ❌ |
-| 📮 邮箱支持 | **14+ 服务商** | 仅 SMTP | 仅站内 |
-| 📊 股市+天气 | ✅ **内置** | ❌ | ✅ |
-| ☁️ 云端运行 | ✅ **免费** | ❌ 需服务器 | ✅ |
+- **31 家 AI 提供商**：DeepSeek / OpenAI / Claude / Gemini / 通义 / Kimi / 豆包 / 智谱 / Grok / 混元 / 星火 / Llama 等
+- **动态模型列表**：填 API Key 后自动拉取可用模型
+- **三种协议**：OpenAI 兼容 / Anthropic / Gemini
+- **自定义端点**：支持中转、代理、本地部署的服务
 
----
+### 邮件主题
 
-## 🚀 快速开始（GitHub Actions · 推荐）
+**10 套预设主题**，Web UI 一键切换：
 
-### 1️⃣ Fork 仓库
+| 主题 | 分组 | 风格 |
+|------|------|------|
+| 极简白 | 明亮 | 渐变紫 + 纯白卡片（默认） |
+| 墨黑 | 暗色 | 深灰底 + 暖白字 |
+| 报刊 | 古典 | 米色纸 + 衬线体 |
+| 深海 | 暗色 | 藏青 + 青蓝 |
+| 霓虹 | 暗色 | 黑底 + 洋红青绿 |
+| 森野 | 自然 | 墨绿 + 苔藓 |
+| 暖阳 | 明亮 | 橙粉渐变 + 奶油底 |
+| 樱粉 | 明亮 | 樱花粉 + 圆体 |
+| 极光 | 暗色 | 青紫流体渐变 |
+| 简约灰 | 明亮 | 黑白灰极简 |
 
-打开 [github.com/Mao2973464622/lumapost](https://github.com/Mao2973464622/lumapost) → 点右上角 **Fork**
+**自定义主题**：17 个颜色字段 + 3 种字体，实时预览。
 
-### 2️⃣ 配置 Secrets
+### 邮件投递
 
-进入你 Fork 的仓库 → **Settings** → **Secrets and variables** → **Actions** → **New repository secret**
+- **18 家服务商**：QQ / 163 / 126 / Gmail / Outlook / 阿里云 / 企业QQ / 自定义 SMTP / Resend / SendGrid / Mailgun / Postmark / Graph / 阿里云DM / 腾讯云SES / Mailjet
 
-**最少只需 3 个：**
+### 定时调度
 
-```env
-AI_API_KEY = sk-your-deepseek-api-key    # DeepSeek API Key
-MAIL_USER  = your-email@qq.com           # 发件邮箱
-MAIL_PASS  = your-smtp-auth-code         # SMTP 授权码（不是登录密码！）
-```
-
-> 💡 DeepSeek 注册：https://platform.deepseek.com
-> 💡 QQ邮箱授权码：设置 → 账户 → POP3/SMTP → 开启 → 生成授权码
-
-### 3️⃣ 测试
-
-仓库 **Actions** → **LumaPost Email** → **Run workflow** → 选时段 → **Run workflow**
-
-### 4️⃣ 自动化运行
-
-已内置定时任务，每天 4 次：
-| 时段 | 北京时间 | 内容 |
-|------|----------|------|
-| 🌅 早报 | **06:00** | 隔夜大事、美股收盘 |
-| ☀️ 午报 | **12:00** | 上午行情、企业动态 |
-| 🌇 午后速递 | **17:30** | 午后新品、突发事件 |
-| 🌙 晚间总结 | **21:00** | 全天复盘、热榜 TOP |
+- **内置调度器**，30 秒轮询，无需 crontab
+- 4 个时段独立配置时间
+- 每时段可分别开关「自动抓取」和「自动发送」
+- 实时执行日志
 
 ---
 
-## � 数据处理流程
+## 界面
+
+### Web UI
+
+本地打开 `http://127.0.0.1:3000`，8 个页面：
 
 ```
-🌐 22 个信息源
-  │
-  ├─ uapis.cn 热榜（15 平台·串行·300ms 间隔）
-  ├─ AI 资讯站（AIbase/AI-Bot/猫目/CNMO科技/IT之家/数码闲聊站）
-  └─ 国际热门（GitHub Trending / Product Hunt / Hacker News）
-  │
-  ▼
-🧠 fetch-news-ai.js
-  │  ① 关键词过滤 → 10 版块各自匹配
-  │  ② 分 2 批并行调用 AI（每组 ≤4 版块）
-  │  ③ 生成头条 TOP3 + TL;DR + 5 趋势分析
-  │  ④ 股市数据（新浪·GBK解码）+ 天气（Open-Meteo）
-  │  ⑤ 完整性检查（GOOD ≥40 / DEGRADED 20-39 / LOW <20）
-  │
-  ▼  data/{period}-latest.json
-  │
-🎨 gen-html.js
-  │  渲染响应式 HTML 邮件（4 时段配色 + 双列目录 + 相对时间）
-  │
-  ▼  data/{period}-email.html
-  │
-📮 mail-provider.js
-  │  SMTP / HTTP API → 你的邮箱
-  │
-  ▼
-✅ 邮件推送完成
+仪表盘  系统概览 · 运行环境 · 最新头条
+模型    AI 提供商 · API Key · 模型选择 · 温度调节
+邮件    SMTP 配置 · 主题选择 · 自定义配色
+信息源  175 个源管理 · 版块开关 · 抓取预览
+定时    4 时段设置 · 自动调度 · 执行日志
+历史    抓取/发送记录
+预览    邮件 HTML 预览
+系统    运行信息 · 监听设置 · 配置重置
+```
+
+### 邮件
+
+杂志式排版，移动端适配：
+
+```
+品牌栏
+  ↓
+渐变大标题 + 三栏数据（条数 / 版块 / 摘要）
+  ↓
+TL;DR 金边卡片
+  ↓
+数据概览：环形图 + 横向条形图（SVG 动效）
+  ↓
+本期目录（颜色圆点 + 条数胶囊）
+  ↓
+各版块（左侧色条 + 新闻卡片 + 快评色块）
+  ↓
+每日一句
 ```
 
 ---
 
-## �🛠 本地运行
+## 快速开始
+
+### 环境要求
+
+- Node.js >= 20
+- 一个 AI API Key
+- 一个邮箱账号（或 API 型邮件服务）
+
+### 安装
 
 ```bash
-# 1. 克隆
 git clone https://github.com/Mao2973464622/lumapost.git
 cd lumapost
-
-# 2. 安装依赖
 npm install
-
-# 3. 配置环境变量
-cp .env.example .env
-# 编辑 .env 填入 AI_API_KEY / MAIL_USER / MAIL_PASS
-
-# 4. 测试
-npm run ai:test       # 测试 AI 是否可用
-npm run send:test     # 测试邮件能否发送
-
-# 5. 生成并发送
-npm run all:morning   # 发送早报
-npm run all:noon      # 发送午报
-npm run all:afternoon # 发送午后速递
-npm run all:evening   # 发送晚间总结
+npm start
 ```
 
----
+打开 `http://127.0.0.1:3000`。
 
-## 🐳 Docker 部署
+### 配置
+
+1. **模型页**：选提供商，填 API Key，点「拉取」选模型
+2. **邮件页**：填邮箱和授权码，选主题
+3. **信息源页**：默认已启用 175 个，可以关掉不要的
+4. **定时页**：设置时间并打开「启用内置自动调度」
+
+所有配置自动写入 `config/app.json`，改完无需重启。
+
+### 手动跑一次
 
 ```bash
-docker compose build
-docker compose run --rm lumapost all:morning  # 测试运行
-docker compose up -d                           # 启动定时任务
+# 抓取 + AI 生成
+npm run fetch:morning
+
+# 生成 HTML
+npm run gen:morning
+
+# 发送
+npm run send:morning
+
+# 或者一条龙
+npm run all:morning
 ```
 
 ---
 
-## 🤖 支持的 AI 模型
-
-| 标识符 | 提供商 | 默认模型 | 费用 |
-|--------|--------|---------|------|
-| `deepseek` | DeepSeek | deepseek-v4-flash | ¥1/百万 token |
-| `minimax` | MiniMax | MiniMax-M3 | 官方定价 |
-| `openai` | OpenAI | gpt-4o-mini | $0.15/百万 |
-| `anthropic` | Anthropic Claude | claude-3-7-sonnet | $3/百万 |
-| `google` | Google Gemini | gemini-2.5-flash | 🆓 免费额度 |
-| `qwen` | 阿里通义千问 | qwen3.7-plus | 🆓 100万 token/天 |
-| `zhipu` | 智谱 GLM | glm-4.5-plus | 新用户免费 |
-| `doubao` | 字节豆包 | doubao-pro-256k | 1 折起 |
-| `kimi` | 月之暗面 Kimi | moonshot-v1-128k | 官方定价 |
-| `stepfun` | 阶跃星辰 | step-1.5-32k | 官方定价 |
-| `hunyuan` | 腾讯混元 | hy-3.0-pro | 官方定价 |
-| `pangu` | 华为盘古 | pangu-ultra | 企业级 |
-| `groq` | Groq | llama-3.3-70b-specdec | 🆓 免费额度 |
-| `ernie` | 百度文心一言 | ernie-4.0-turbo | 官方定价 |
-| `siliconflow` | 硅基流动 | deepseek-ai/DeepSeek-V4 | 官方定价 |
-| `openrouter` | OpenRouter | deepseek/deepseek-chat | 聚合平台 |
-| `custom` | 自定义 | 任意 | Ollama 本地 |
-
-> 切换方式：`AI_PROVIDER=xxx` + 对应 `AI_API_KEY`
-
----
-
-## 📮 支持的邮件服务
-
-**SMTP 协议：** `qq` · `netease` · `netease-126` · `netease-yeah` · `gmail` · `outlook` · `yahoo` · `aliyun` · `qq-enterprise` · `custom-smtp`
-
-**HTTP API 协议：** `resend`（🥇 海外推荐，免费 3000 封/月） · `sendgrid` · `mailgun` · `postmark` · `graph`
-
-> 切换方式：`MAIL_PROVIDER=xxx` + 对应凭证
-
----
-
-## 📁 项目结构
+## 目录结构
 
 ```
 lumapost/
-├── .github/workflows/email.yml     # GitHub Actions 工作流
 ├── scripts/
-│   ├── ai-provider.js              # 22+ AI 模型统一接口
-│   ├── mail-provider.js            # 14+ 邮件服务统一接口
-│   ├── fetch-news-ai.js            # AI 驱动新闻抓取（主流程）
-│   ├── fetch-cn-news.js            # 静态热榜降级方案
-│   └── gen-html.js                 # HTML 邮件生成
-├── data/                           # 输出目录
-├── .env.example                    # 环境变量模板
-├── package.json                    # 依赖 + npm scripts
-├── Dockerfile                      # Docker 镜像
-├── docker-compose.yml              # Docker Compose + Ofelia 定时器
-├── ofelia.ini                      # Ofelia 定时任务
-├── crontab.example                 # Crontab 示例
-├── lumapost.service                # systemd 服务
-├── SKILL.md                        # WorkBuddy 插件
-├── plugin.json                     # 通用插件格式
-├── plugin-clawhub.json             # 龙虾/OpenCat 插件
-├── plugin-skillhub.yaml            # SkillHub 插件
-├── 技术说明.md                      # 技术文档
-├── 使用说明.md                      # 用户手册
-├── 问题.md                          # FAQ
-└── README.md                       # 本文件
+│   ├── web-server.js        Web 服务器 + REST API
+│   ├── config-store.js      配置中心（单一数据源）
+│   ├── scheduler.js         内置定时调度器
+│   ├── ai-provider.js       AI 统一调用层（31 家）
+│   ├── mail-provider.js     邮件统一发送层（18 家）
+│   ├── rss-fetcher.js       RSS/Atom/JSON Feed 解析引擎
+│   ├── hotboard.js          中文热榜 + 游戏 + 行情
+│   ├── web-search.js        搜索聚合
+│   ├── sources-catalog.js   175 个信息源库
+│   ├── mail-charts.js       SVG 图表库（7 种）
+│   ├── mail-themes.js       10 套主题定义
+│   ├── gen-html.js          邮件 HTML 生成器
+│   ├── fetch-news-ai.js     新闻抓取 + AI 编排
+│   └── fetch-cn-news.js     中文新闻抓取
+├── public/
+│   └── index.html           单文件 Web UI（约 110 KB）
+├── config/
+│   └── app.json             配置文件（自动生成）
+└── package.json
 ```
 
 ---
 
-## 📚 文档导航
+## API 一览
 
-| 文档 | 适合谁 | 内容 |
-|------|--------|------|
-| [📖 使用说明](./使用说明.md) | **所有用户** | 9 种部署方式、配置表、进阶玩法 |
-| [🔧 技术说明](./技术说明.md) | **开发者** | 架构图、数据流、API、协议、环境变量 |
-| [❓ 常见问题](./问题.md) | **遇到问题的用户** | 发送失败、AI 问题、邮件问题、Docker 问题 |
-| [📋 4.0 更新日志](./4.0更新日志.md) | **升级用户** | AI Provider v2.0 更新详情 |
-| [🔐 Secrets 配置指南](./4.0secret配置文件.md) | **新手** | GitHub Secrets 完整配置教程 |
+```
+GET    /api/config              读取配置（密钥掩码）
+POST   /api/config              保存配置
+GET    /api/config/validate     配置校验
+GET    /api/system              运行信息
+
+GET    /api/providers           AI 提供商列表
+GET    /api/models/:provider    模型列表（支持临时密钥）
+
+GET    /api/sources             已配置信息源
+GET    /api/sources/catalog     内置源库
+POST   /api/sources/import      批量导入
+POST   /api/sources/test        单源测试
+POST   /api/sources/fetch       批量抓取预览
+
+GET    /api/hotboard            热榜总览
+GET    /api/steam               Steam 榜单
+GET    /api/epic                Epic 限免
+GET    /api/stocks              A 股指数
+GET    /api/trending            GitHub Trending
+
+GET    /api/themes              主题列表
+GET    /api/themes/preview      主题预览
+
+GET    /api/search?q=&mode=     搜索
+
+GET    /api/scheduler           调度状态
+POST   /api/scheduler/trigger   手动触发
+
+POST   /api/fetch               启动抓取
+GET    /api/news/latest         最新新闻
+GET    /api/preview/:period     邮件预览
+POST   /api/test-ai             AI 连通测试
+POST   /api/test-mail           邮件发送测试
+```
 
 ---
 
-## 🤝 参与贡献
+## 命令
 
-欢迎各种形式的贡献！方式包括但不限于：
-
-- 🐛 **提 Issue**：发现 Bug 或有功能建议
-- 🚀 **Pull Request**：改进代码或文档
-- ⭐ **Star**：让更多人看到这个项目
-- 📢 **推荐**：推荐给朋友或同事
-
-**开发指引：**
 ```bash
-git clone https://github.com/Mao2973464622/lumapost.git
-cd lumapost
-npm install
-# 修改代码后确保 npm run all:morning 能正常运行
+npm start               启动 Web 服务
+npm run fetch:morning   抓取早报
+npm run gen:morning     生成早报 HTML
+npm run send:morning    发送早报
+npm run all:morning     全流程
+npm run hot             热榜 + 游戏 + 行情
+npm run hot:stock       只看股市
+npm run sources:list    信息源统计
+npm run sources:test    实测信息源
+npm run config:show     查看配置
+npm run doctor          配置体检
 ```
 
 ---
 
-## ⭐ Star History
+## 设计说明
 
-[![Star History Chart](https://api.star-history.com/svg?repos=Mao2973464622/lumapost&type=Date)](https://star-history.com/#Mao2973464622/lumapost&Date)
+### 为什么依赖这么少
+
+只有 2 个：`dotenv` 和 `nodemailer`。
+
+RSS 解析、热榜抓取、SVG 图表、搜索聚合、Web 服务器全部手写。原因是这类工具越简单越可靠——不用管三方库的破坏性更新，也不会有版本冲突。
+
+### 邮件图表为什么用 SMIL
+
+`<animate>` 而非 CSS 动画，因为邮件客户端会剥离 `<style>` 块，SMIL 属性内联在 SVG 里能活下来。
+
+**关键原则：静态即正确。** 每个图形先用最终属性值绘制，动画只做「从 0 长出来」的增强。这样即使客户端把 `<animate>` 全剥了（QQ 邮箱常见），图形依然完整。
+
+### 邮件为什么不用毛玻璃
+
+`backdrop-filter` 在 QQ / Outlook / Gmail 全部被剥离。邮件只能用「半透明色块 + 细边框」模拟层次感。
+
+Web UI 上是真毛玻璃（`blur(18px)`）。
 
 ---
 
-## 📜 License
+## 已知限制
 
-MIT License — 免费开源，欢迎 Star ⭐
+| 限制 | 说明 |
+|------|------|
+| pRoot/proot 环境 | 容器网络隔离，手机浏览器访问不到容器内的 127.0.0.1。建议用 Termux。 |
+| QQ 邮箱授权码 | 需要先在邮箱后台开启 SMTP 服务，否则会返回 535。 |
+| 部分信息源 | 少数站点有反爬或地区限制，已从源库剔除。 |
+| 邮件体积 | 完整一期约 190 KB，图片多的话可能触发邮箱限流。 |
+
+---
+
+## License
+
+MIT
+
+---
 
 <p align="center">
-  <b>项目地址</b>：<a href="https://github.com/Mao2973464622/lumapost">github.com/Mao2973464622/lumapost</a>
-  <br>
-  <b>问题反馈</b>：提 Issue 或加 QQ <b>2973464622</b>
-  <br><br>
-  <img src="https://img.shields.io/github/stars/Mao2973464622/lumapost?style=social" alt="stars">
-  <img src="https://img.shields.io/github/forks/Mao2973464622/lumapost?style=social" alt="forks">
+  <sub>Built with AI · 175 sources · 10 themes · 2 dependencies</sub>
 </p>

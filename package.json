@@ -1,7 +1,7 @@
 {
   "name": "lumapost",
-  "version": "8.0.0",
-  "description": "LumaPost 光影邮报 — AI 驱动的智能新闻邮件系统。本地部署 Web UI 管理后台，配置文件统一持久化，内置定时调度。",
+  "version": "9.0.0",
+  "description": "LumaPost 光影邮报 — AI 驱动的智能新闻邮件系统。175 个信息源 · 13 个中文热榜 · 10 套邮件主题 · 本地 Web UI 管理后台。",
   "main": "scripts/fetch-news-ai.js",
   "scripts": {
     "ai:config": "node scripts/ai-provider.js --config",
