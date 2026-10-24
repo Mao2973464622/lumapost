@@ -394,6 +394,22 @@ textarea.input{height:auto;min-height:84px;padding:11px var(--s-3);resize:vertic
   .seg{width:100%}
   .seg button{flex:1;justify-content:center}
 }
+
+
+/* ---------- 信息源分组 / 源库芯片 ---------- */
+.src-group + .src-group{border-top:1px solid var(--line)}
+.src-group-head{display:flex;align-items:center;gap:7px;padding:10px var(--s-5);background:var(--surface-2);font-size:12px;font-weight:700;color:var(--text-2)}
+.src-group-head .ic{width:14px;height:14px;color:var(--text-3)}
+.cat-block{padding:var(--s-3) 0;border-bottom:1px solid var(--line)}
+.cat-block:last-child{border-bottom:0}
+.cat-block-head{display:flex;align-items:center;justify-content:space-between;gap:var(--s-3);margin-bottom:var(--s-2)}
+.cat-block-title{display:flex;align-items:center;gap:7px;font-size:12.5px;font-weight:700;color:var(--text-2)}
+.cat-block-title .ic{width:14px;height:14px;color:var(--text-3)}
+.cat-chips{display:flex;flex-wrap:wrap;gap:6px}
+.src-chip{height:28px;padding:0 11px;border-radius:var(--r-full);background:var(--surface-2);border:1px solid var(--line);font-size:11.5px;font-weight:600;color:var(--text-2);display:inline-flex;align-items:center;gap:5px;transition:all var(--fast) var(--ease)}
+.src-chip .ic{width:11px;height:11px;opacity:.7}
+.src-chip:hover:not(:disabled){border-color:var(--brand-line);color:var(--brand-1);background:var(--brand-soft)}
+.src-chip.added{opacity:.45;pointer-events:none;border-style:dashed}
 </style>
 </head>
 <body>
@@ -498,6 +514,10 @@ const State = {
   previewPeriod: 'morning',
   loading: 0,
   scheduler: null,
+  srcCache: [],
+  catalog: [],
+  categories: {},
+  engines: {},
 };
 
 const API = {
@@ -841,54 +861,260 @@ function collectMail() {
   return { mail: out };
 }
 
-/* ============ 信息源 ============ */
+/* ============ 信息源（v5.1 增强版）============ */
+const CAT_ICON = {
+  ai: 'cpu', hardware: 'monitor', github: 'code', internet: 'globe',
+  news: 'newspaper', politics: 'globe', finance: 'coin', medical: 'stethoscope',
+  law: 'doc', education: 'doc', sports: 'bolt', entertainment: 'image',
+  military: 'warning', space: 'space', games: 'puzzle', auto: 'bolt', life: 'moon',
+};
+
 async function pageSources() {
-  const src = await API.get('/api/sources').catch(() => ({ rss: [], enableRss: true }));
-  const rss = src.rss || [];
-  const sections = [
-    ['ai', 'AI'], ['hardware', '硬件'], ['github', '开源'],
-    ['news', '时事'], ['games', '游戏'], ['finance', '财经'],
-    ['auto', '汽车'], ['internet', '互联网'], ['life', '生活'], ['space', '科技'],
-  ];
-  const enabled = State.config.sections?.enabled || [];
+  const [src, cat] = await Promise.all([
+    API.get('/api/sources').catch(() => ({ rss: [], enableRss: true })),
+    API.get('/api/sources/catalog').catch(() => ({ catalog: [], categories: {}, engines: {} })),
+  ]);
+  State.srcCache = src.rss || [];
+  State.catalog = cat.catalog || [];
+  State.categories = cat.categories || {};
+  State.engines = cat.engines || {};
 
-  const rows = rss.length
-    ? rss.map((s, i) => `<div class="list-item" data-src-row="${i}">
-        <div class="li-main">
-          <div class="li-title">${esc(s.name || '未命名源')}</div>
-          <div class="li-meta mono">${esc(s.url || '')}</div>
+  const rss = State.srcCache;
+  const cats = State.categories;
+  const sections = State.config.sections?.enabled || [];
+  const searchCfg = State.config.search || {};
+
+  const byCat = {};
+  for (const s of rss) {
+    const c = s.category || 'news';
+    (byCat[c] = byCat[c] || []).push(s);
+  }
+
+  const srcRows = rss.length
+    ? Object.keys(byCat).sort().map((c) => `
+      <div class="src-group">
+        <div class="src-group-head">
+          ${ic(CAT_ICON[c] || 'globe')}
+          <span>${esc(cats[c] || c)}</span>
+          <span class="badge">${byCat[c].length}</span>
         </div>
-        <span class="badge ${s.enabled ? 'ok' : ''}">${esc(s.category || 'news')}</span>
-        <button class="icon-btn" data-act="del-src" data-idx="${i}" aria-label="删除">${ic('trash')}</button>
+        ${byCat[c].map((s) => {
+          const idx = rss.indexOf(s);
+          return `<div class="list-item" data-src-row="${idx}">
+            <label class="switch" style="flex:0 0 auto">
+              <input type="checkbox" data-toggle-src="${idx}" ${s.enabled !== false ? 'checked' : ''}>
+              <span class="switch-track"></span>
+            </label>
+            <div class="li-main">
+              <div class="li-title">${esc(s.name || '未命名')}</div>
+              <div class="li-meta mono">${esc(String(s.url || '').replace(/^https?:\/\//, '').slice(0, 46))}</div>
+            </div>
+            <button class="icon-btn" data-act="test-src" data-idx="${idx}" title="测试">${ic('flask')}</button>
+            <button class="icon-btn" data-act="del-src" data-idx="${idx}" title="删除">${ic('trash')}</button>
+          </div>`;
+        }).join('')}
       </div>`).join('')
-    : emptyState('globe', '还没有信息源', '添加 RSS 地址后，抓取任务会合并这些来源。');
+    : emptyState('globe', '还没有信息源', '点击下方「导入推荐源」一键添加 34 个实测可用的信息源。');
 
-  return pageHead('信息源', 'RSS 订阅与新闻版块',
-    `<button class="btn btn-secondary btn-sm" data-act="save-sources">${ic('save')}保存</button>`) +
+  // 内置库按分类分组
+  const catalogGroups = Object.keys(cats).map((c) => {
+    const items = State.catalog.filter((s) => s.category === c);
+    if (!items.length) return '';
+    const existing = new Set(rss.map((s) => s.url));
+    return `<div class="cat-block">
+      <div class="cat-block-head">
+        <span class="cat-block-title">${ic(CAT_ICON[c] || 'globe')}${esc(cats[c])}</span>
+        <button class="btn btn-sm btn-ghost" data-act="import-cat" data-cat="${c}">全部导入</button>
+      </div>
+      <div class="cat-chips">
+        ${items.map((s) => {
+          const has = existing.has(s.url);
+          return `<button class="src-chip ${has ? 'added' : ''}" data-add-src="${esc(s.url)}" data-name="${esc(s.name)}" data-cat="${esc(s.category)}" ${has ? 'disabled' : ''}>
+            ${has ? ic('check') : ic('plus-info')}${esc(s.name)}
+          </button>`;
+        }).join('')}
+      </div>
+    </div>`;
+  }).join('');
+
+  const engineOpts = Object.entries(State.engines).map(([k, v]) => opt(k, v.name, searchCfg.engine)).join('');
+
+  return pageHead('信息源', `${rss.length} 个已启用 · 内置库 ${State.catalog.length} 个`,
+    `<button class="btn btn-secondary btn-sm" data-act="fetch-preview">${ic('bolt')}抓取预览</button>`) +
+
     section('抓取版块', `<div class="card"><div class="card-bd">
       <div class="chips" id="sectionChips">
-        ${sections.map(([k, n]) => `<button class="chip ${enabled.includes(k) ? 'active' : ''}" data-section="${k}">${n}</button>`).join('')}
+        ${Object.entries(cats).map(([k, n]) => `<button class="chip ${sections.includes(k) ? 'active' : ''}" data-section="${k}">${n}</button>`).join('')}
       </div>
-      <div class="li-meta mt-4">已选 <b id="secCount">${enabled.length}</b> 个版块，抓取时会按主题分类</div>
+      <div class="li-meta mt-4">已选 <b id="secCount">${sections.length}</b> 个版块</div>
     </div></div>`, 'list') +
-    section('RSS 订阅源', `<div class="card">
-      <div class="list" id="srcList">${rows}</div>
-      <div class="card-bd" style="border-top:1px solid var(--line)">
-        <div class="form-row">
-          ${field('名称', `<input class="input" id="new-src-name" placeholder="如：少数派">`)}
-          ${field('分类', `<select class="select" id="new-src-cat">
-            ${sections.map(([k, n]) => opt(k, n, 'news')).join('')}
-          </select>`)}
+
+    section('搜索引擎', `<div class="card"><div class="card-bd">
+      ${field('默认引擎', `<select class="select" id="f-search-engine">${engineOpts}</select>`, '用于「搜索」页与抓取补充')}
+      <label class="switch mt-4" style="display:flex;width:100%">
+        <input type="checkbox" id="f-search-ai" ${searchCfg.aiSearch !== false ? 'checked' : ''}>
+        <span class="switch-track"></span>
+        <span class="switch-text">启用大模型搜索（与网页搜索并用）</span>
+      </label>
+      <div class="mt-4"><button class="btn btn-primary btn-block" data-act="save-search">${ic('save')}保存搜索设置</button></div>
+    </div></div>`, 'globe') +
+
+    section('已选信息源', `<div class="card">
+      <div class="card-hd">
+        <div class="card-hd-title">${rss.length} 个源</div>
+        <div style="display:flex;gap:6px">
+          <button class="btn btn-sm btn-secondary" data-act="import-recommended">${ic('plus-info')}导入推荐源</button>
+          <button class="btn btn-sm btn-secondary" data-act="import-all">${ic('package')}导入全部</button>
         </div>
-        ${field('RSS 地址', `<div style="display:flex;gap:8px">
-          <input class="input mono" id="new-src-url" placeholder="https://example.com/rss">
-          <button class="btn btn-secondary" data-act="add-src" style="flex:0 0 auto">${ic('plus-info')}添加</button>
-        </div>`)}
       </div>
-    </div>`, 'globe') +
+      <div id="srcList">${srcRows}</div>
+      ${rss.length ? `<div class="card-bd" style="border-top:1px solid var(--line)">
+        <button class="btn btn-primary btn-block" data-act="save-sources">${ic('save')}保存信息源</button>
+      </div>` : ''}
+    </div>`, 'inbox') +
+
+    section('内置源库', `<div class="card"><div class="card-bd">
+      <div class="li-meta" style="margin-bottom:12px">共 ${State.catalog.length} 个源，全部实测可用。点击即可添加。</div>
+      ${catalogGroups}
+    </div></div>`, 'package') +
+
+    section('手动添加', `<div class="card"><div class="card-bd">
+      <div class="form-row">
+        ${field('名称', `<input class="input" id="new-src-name" placeholder="如：某科技媒体">`)}
+        ${field('分类', `<select class="select" id="new-src-cat">
+          ${Object.entries(cats).map(([k, n]) => opt(k, n, 'news')).join('')}
+        </select>`)}
+      </div>
+      ${field('RSS 地址', `<div style="display:flex;gap:8px">
+        <input class="input mono" id="new-src-url" placeholder="https://example.com/feed">
+        <button class="btn btn-secondary" data-act="add-src" style="flex:0 0 auto">${ic('plus-info')}添加</button>
+      </div>`)}
+    </div></div>`, 'plus-info') +
+
     `<div class="sticky-actions">
-      <button class="btn btn-primary" data-act="save-sources">${ic('save')}保存信息源</button>
+      <button class="btn btn-primary" data-act="save-sources">${ic('save')}保存全部改动</button>
     </div>`;
+}
+
+/* 收集当前源列表（含开关状态）*/
+function collectSourceList() {
+  const list = (State.srcCache || []).map((s, i) => {
+    const cb = document.querySelector('[data-toggle-src="' + i + '"]');
+    return Object.assign({}, s, { enabled: cb ? cb.checked : (s.enabled !== false) });
+  });
+  return list;
+}
+
+async function saveSources() {
+  const rss = collectSourceList();
+  const sections = $$('#sectionChips .chip.active').map((c) => c.dataset.section);
+  try {
+    busy(true);
+    await API.post('/api/config', { sources: { enableRss: true, rss }, sections: { enabled: sections } });
+    busy(false);
+    State.config = await API.get('/api/config');
+    toast('已保存 ' + rss.length + ' 个信息源', 'ok');
+    buzz();
+    render();
+  } catch (e) {
+    busy(false);
+    toast('保存失败: ' + e.message, 'err');
+  }
+}
+
+async function importSources(mode, extra) {
+  try {
+    busy(true);
+    const body = Object.assign({ mode }, extra || {});
+    const d = await API.post('/api/sources/import', body);
+    busy(false);
+    if (d.added > 0) {
+      toast('已添加 ' + d.added + ' 个源，共 ' + d.total + ' 个', 'ok');
+      buzz();
+      render();
+    } else {
+      toast('这些源已在列表中', 'info');
+    }
+  } catch (e) {
+    busy(false);
+    toast('导入失败: ' + e.message, 'err');
+  }
+}
+
+async function addOneSource(url, name, category) {
+  const rss = (State.srcCache || []).slice();
+  if (rss.some((s) => s.url === url)) return toast('该源已在列表中', 'info');
+  rss.push({ name: name || url, url, category: category || 'news', enabled: true });
+  try {
+    busy(true);
+    await API.post('/api/config', { sources: { enableRss: true, rss } });
+    busy(false);
+    toast('已添加：' + (name || url), 'ok');
+    buzz();
+    render();
+  } catch (e) {
+    busy(false);
+    toast('添加失败: ' + e.message, 'err');
+  }
+}
+
+async function testSource(idx) {
+  const s = State.srcCache[idx];
+  if (!s) return;
+  try {
+    busy(true);
+    const d = await API.post('/api/sources/test', { url: s.url, name: s.name });
+    busy(false);
+    if (d.success) {
+      toast(s.name + '：' + d.count + ' 条 · ' + d.latencyMs + 'ms', 'ok');
+    } else {
+      toast(s.name + ' 失败：' + (d.error || '无数据'), 'err');
+    }
+  } catch (e) {
+    busy(false);
+    toast('测试失败: ' + e.message, 'err');
+  }
+}
+
+async function fetchPreview() {
+  const shell = $('#srcList');
+  if (!shell) return;
+  try {
+    busy(true);
+    toast('正在抓取全部源…', 'info');
+    const rss = collectSourceList().filter((s) => s.enabled !== false);
+    const d = await API.post('/api/sources/fetch', {
+      urls: rss.map((s) => s.url), limit: 5,
+    });
+    busy(false);
+    if (!d.success) throw new Error(d.error || '抓取失败');
+
+    const prev = document.getElementById('previewPanel');
+    const html = `<div class="card" id="previewPanel" style="margin-bottom:var(--s-3)">
+      <div class="card-hd">
+        <div class="card-hd-title">抓取结果 · ${d.stats.ok}/${d.stats.total} 成功 · ${d.stats.items} 条 · ${Math.round(d.latencyMs / 1000)}s</div>
+        <button class="icon-btn" data-act="close-preview">${ic('close')}</button>
+      </div>
+      <div class="list">
+        ${(d.latest || []).slice(0, 12).map((it) => `<div class="list-item">
+          <div class="li-av">${ic(CAT_ICON[it.category] || 'globe')}</div>
+          <div class="li-main">
+            <div class="li-title">${esc(it.title)}</div>
+            <div class="li-meta"><span>${esc(it.source)}</span><span>${esc(it.category)}</span></div>
+          </div>
+        </div>`).join('')}
+      </div>
+      ${d.errors && d.errors.length ? `<div class="card-bd" style="border-top:1px solid var(--line)">
+        <div class="li-meta" style="color:var(--warn)">${d.errors.length} 个源失败：${esc(d.errors.map((e) => e.name).join('、'))}</div>
+      </div>` : ''}
+    </div>`;
+    if (prev) prev.remove();
+    shell.parentElement.insertAdjacentHTML('beforebegin', html);
+    toast('抓取完成', 'ok');
+  } catch (e) {
+    busy(false);
+    toast('抓取失败: ' + e.message, 'err');
+  }
 }
 
 /* ============ 定时任务 ============ */
@@ -1372,7 +1598,7 @@ function collectSources() {
   return { sources: { enableRss: true, rss } };
 }
 
-async function saveSources() {
+async function __oldSaveSources() {
   try {
     const src = await API.get('/api/sources');
     const rows = $$('#srcList [data-src-row]');
@@ -1393,6 +1619,45 @@ async function saveSources() {
   }
 }
 
+/* ---------- 信息源 v5.1 事件 ---------- */
+const SRC_ACTIONS = {
+  'import-recommended': () => importSources('recommended', { perCategory: 2 }),
+  'import-all': () => importSources('all'),
+  'import-cat': (el) => importSources('category', { category: el.dataset.cat }),
+  'save-sources': () => saveSources(),
+  'test-src': (el) => testSource(Number(el.dataset.idx)),
+  'fetch-preview': () => fetchPreview(),
+  'close-preview': () => { const p = document.getElementById('previewPanel'); if (p) p.remove(); },
+  'save-search': () => savePatch({
+    search: {
+      engine: $('#f-search-engine') ? $('#f-search-engine').value : 'bing',
+      aiSearch: $('#f-search-ai') ? !!$('#f-search-ai').checked : true,
+      useForNews: false,
+    },
+  }, '搜索设置已保存'),
+  'del-src': async (el) => {
+    const i = Number(el.dataset.idx);
+    const rss = (State.srcCache || []).slice();
+    rss.splice(i, 1);
+    try {
+      busy(true);
+      await API.post('/api/config', { sources: { enableRss: true, rss } });
+      busy(false);
+      toast('已删除', 'ok');
+      render();
+    } catch (e) { busy(false); toast('删除失败: ' + e.message, 'err'); }
+  },
+  'add-src': () => {
+    const url = ($('#new-src-url') || {}).value || '';
+    const name = ($('#new-src-name') || {}).value || '';
+    const category = ($('#new-src-cat') || {}).value || 'news';
+    const u = url.trim();
+    if (!u) return toast('请填写 RSS 地址', 'err');
+    if (!/^https?:\/\//.test(u)) return toast('地址需以 http:// 或 https:// 开头', 'err');
+    return addOneSource(u, name.trim(), category);
+  },
+};
+
 /* ============ 事件委托 ============ */
 function bind() {
   const view = $('#view');
@@ -1408,6 +1673,7 @@ function bind() {
     const act = e.target.closest('[data-act]');
     if (act) {
       const a = act.dataset.act;
+      if (SRC_ACTIONS[a]) return SRC_ACTIONS[a](act);
       if (a === 'nav') return go(act.dataset.to);
       if (a === 'reload') { toast('已刷新', 'info'); return render(); }
       if (a === 'fetch') return doFetch();
@@ -1508,6 +1774,12 @@ function bind() {
         }
         return;
       }
+    }
+
+    /* 源库芯片 */
+    const addSrc = e.target.closest('[data-add-src]');
+    if (addSrc && !addSrc.disabled) {
+      return addOneSource(addSrc.dataset.addSrc, addSrc.dataset.name, addSrc.dataset.cat);
     }
 
     /* 模型 chip */
