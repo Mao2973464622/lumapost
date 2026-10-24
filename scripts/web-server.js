@@ -723,6 +723,71 @@ async function handleAPI(req, res) {
       return res.end(html);
     }
 
+    /* ---- 工作流触发入口（GET，便于被外部自动化调用）---- */
+    if (p === '/api/run/fetch' && m === 'GET') {
+      const period = String(u.query.period || 'all');
+      const { spawn } = require('child_process');
+      const child = spawn(process.execPath, ['scripts/fetch-news-ai.js', '--period=' + period], {
+        cwd: ROOT, detached: true, stdio: 'ignore',
+      });
+      child.unref();
+      configStore.addHistory('fetchHistory', {
+        title: (period === 'all' ? '全时段' : period) + ' 新闻抓取（工作流触发）',
+        status: '运行中',
+      });
+      return sendJSON(res, { success: true, message: '已启动 ' + period + ' 抓取', period: period });
+    }
+
+    if (p === '/api/run/send' && m === 'GET') {
+      const period = String(u.query.period || 'morning');
+      const slot = ['morning', 'noon', 'afternoon', 'evening'].indexOf(period) >= 0 ? period : 'morning';
+      const dataFile = path.join(DATA_DIR, slot + '-latest.json');
+      const htmlFile = path.join(DATA_DIR, slot + '-email.html');
+      if (!fs.existsSync(dataFile)) {
+        return sendJSON(res, { success: false, error: '该时段暂无数据，请先抓取', period: slot }, 400);
+      }
+      try {
+        const { spawnSync } = require('child_process');
+        // 生成 HTML（若过期）
+        if (!fs.existsSync(htmlFile) || fs.statSync(htmlFile).mtimeMs < fs.statSync(dataFile).mtimeMs) {
+          spawnSync(process.execPath, ['scripts/gen-html.js',
+            '--data-file=' + dataFile, '--output=' + htmlFile], { cwd: ROOT, timeout: 60000 });
+        }
+        const mailProvider = require('./mail-provider');
+        const cfg = configStore.getAll();
+        const html = fs.readFileSync(htmlFile, 'utf8');
+        const subject = (cfg.mail.subjectPrefix || 'LumaPost 光影邮报') + ' · ' +
+          ({ morning: '早报', noon: '午报', afternoon: '午后速递', evening: '晚间总结' })[slot] +
+          ' · ' + new Date().toLocaleDateString('zh-CN');
+        mailProvider.send({
+          to: cfg.mail.to || cfg.mail.user,
+          subject: subject,
+          html: html,
+        }).then((r) => {
+          configStore.addHistory('sendHistory', { title: subject, status: '完成' });
+        }).catch((e) => {
+          configStore.addHistory('sendHistory', { title: subject, status: '失败', error: e.message });
+        });
+        return sendJSON(res, { success: true, message: '已启动发送', period: slot, to: cfg.mail.to || cfg.mail.user });
+      } catch (e) {
+        return sendError(res, '发送失败: ' + e.message);
+      }
+    }
+
+    if (p === '/api/run/full' && m === 'GET') {
+      // 一站式：抓取 → 等待 → 生成 → 发送（异步执行，立即返回）
+      const period = String(u.query.period || 'morning');
+      const slot = ['morning', 'noon', 'afternoon', 'evening'].indexOf(period) >= 0 ? period : 'morning';
+      const { spawn } = require('child_process');
+      const script = 'scripts/fetch-news-ai.js';
+      const child = spawn(process.execPath, [script, '--period=' + slot], {
+        cwd: ROOT, detached: true, stdio: 'ignore',
+      });
+      child.unref();
+      configStore.addHistory('fetchHistory', { title: slot + ' 完整流程（工作流触发）', status: '运行中' });
+      return sendJSON(res, { success: true, message: '已启动完整流程：' + slot, period: slot });
+    }
+
     return sendError(res, 'API 不存在: ' + p, 404);
   } catch (e) {
     console.error('[api] ' + p + ' -> ' + e.message);
