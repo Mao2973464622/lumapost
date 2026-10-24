@@ -1,6 +1,6 @@
 {
   "name": "lumapost",
-  "version": "5.2.0",
+  "version": "5.3.0",
   "description": "LumaPost 光影邮报 — AI 驱动的智能新闻邮件系统。本地部署 Web UI 管理后台，配置文件统一持久化，内置定时调度。",
   "main": "scripts/fetch-news-ai.js",
   "scripts": {
@@ -36,7 +36,9 @@
     "web": "node scripts/web-server.js",
     "sources:list": "node -e \"const c=require('./scripts/sources-catalog');console.log(c.CATALOG.length+' 个源 / '+Object.keys(c.CATEGORIES).length+' 分类')\"",
     "sources:test": "node scripts/rss-fetcher.js --catalog",
-    "search": "node scripts/web-search.js"
+    "search": "node scripts/web-search.js",
+    "hot": "node scripts/hotboard.js",
+    "hot:stock": "node scripts/hotboard.js stock"
   },
   "keywords": [
     "news",
