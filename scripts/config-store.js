@@ -17,7 +17,7 @@ const CONFIG_DIR = path.join(ROOT, 'config');
 const CONFIG_FILE = path.join(CONFIG_DIR, 'app.json');
 
 const DEFAULT_CONFIG = {
-  version: '5.2.0',
+  version: '5.3.0',
 
   ai: {
     provider: 'deepseek',
@@ -69,6 +69,19 @@ const DEFAULT_CONFIG = {
     engine: 'bing',      // bing | google | baidu | ddg
     aiSearch: true,      // 是否同时用大模型搜索
     useForNews: false,   // 抓取时是否把搜索结果并入
+  },
+
+  // 增强数据源（融合自 daily-news）
+  enhance: {
+    enableHotboard: true,   // 中文热榜总开关
+    hotTypes: [             // 启用的热榜平台
+      'juejin', 'csdn', 'v2ex', 'zhihu', 'weibo', 'douyin',
+      'bilibili', 'tieba', '36kr', 'sspai', 'ithome', 'thepaper', 'toutiao',
+    ],
+    steam: true,            // Steam 特惠/新品/热销
+    epic: true,             // Epic 限时免费
+    stocks: true,           // A 股指数
+    trending: true,         // GitHub Trending
   },
 
   schedule: {

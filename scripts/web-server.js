@@ -154,6 +154,21 @@ function sanitizeConfig(input) {
     };
   }
 
+  if (input.enhance && typeof input.enhance === 'object') {
+    const known = ['juejin','csdn','v2ex','zhihu','weibo','douyin','bilibili','tieba','36kr','sspai','ithome','thepaper','toutiao'];
+    const types = Array.isArray(input.enhance.hotTypes)
+      ? input.enhance.hotTypes.filter((t) => known.indexOf(String(t)) >= 0).slice(0, 20)
+      : known;
+    out.enhance = {
+      enableHotboard: bool(input.enhance.enableHotboard, true),
+      hotTypes: types,
+      steam: bool(input.enhance.steam, true),
+      epic: bool(input.enhance.epic, true),
+      stocks: bool(input.enhance.stocks, true),
+      trending: bool(input.enhance.trending, true),
+    };
+  }
+
   if (input.schedule && typeof input.schedule === 'object') {
     const re = /^([01]\d|2[0-3]):([0-5]\d)$/;
     out.schedule = {};
@@ -546,6 +561,83 @@ async function handleAPI(req, res) {
       } catch (e) {
         return sendError(res, '搜索失败: ' + e.message);
       }
+    }
+
+    /* ---- 热榜 / 游戏 / 行情 ---- */
+    if (p === '/api/hotboard' && m === 'GET') {
+      const types = u.query.types ? String(u.query.types).split(',') : null;
+      const limit = Math.min(Number(u.query.limit) || 10, 40);
+      try {
+        const hot = require('./hotboard');
+        if (u.query.type) {
+          const r = await hot.fetchHotboard(String(u.query.type), { limit });
+          return sendJSON(res, { type: u.query.type, name: r.name, count: r.items.length, items: r.items, error: r.error || null });
+        }
+        const results = await hot.fetchAllHotboards(types, { limit });
+        return sendJSON(res, {
+          boards: results.map((r) => ({ type: r.type, name: r.name, category: r.category, count: r.count, error: r.error })),
+          total: results.reduce((s, r) => s + r.count, 0),
+          available: results.filter((r) => !r.error && r.count > 0).length,
+          types: hot.HOTBOARD_TYPES,
+        });
+      } catch (e) {
+        return sendError(res, '热榜抓取失败: ' + e.message);
+      }
+    }
+
+    if (p === '/api/hotboard/items' && m === 'GET') {
+      const limit = Math.min(Number(u.query.limit) || 10, 40);
+      try {
+        const hot = require('./hotboard');
+        const results = await hot.fetchAllHotboards(
+          u.query.types ? String(u.query.types).split(',') : null,
+          { limit }
+        );
+        const flat = [];
+        results.forEach((r) => {
+          if (!r.error) r.items.forEach((it) => flat.push(it));
+        });
+        return sendJSON(res, { total: flat.length, items: flat, boards: results.length });
+      } catch (e) {
+        return sendError(res, e.message);
+      }
+    }
+
+    if (p === '/api/steam' && m === 'GET') {
+      try {
+        const hot = require('./hotboard');
+        const r = await hot.fetchSteam({ limit: Number(u.query.limit) || 10 });
+        return sendJSON(res, { count: r.items.length, items: r.items, error: r.error || null });
+      } catch (e) { return sendError(res, e.message); }
+    }
+
+    if (p === '/api/epic' && m === 'GET') {
+      try {
+        const hot = require('./hotboard');
+        const r = await hot.fetchEpicFree({ limit: Number(u.query.limit) || 15 });
+        return sendJSON(res, { count: r.items.length, items: r.items, error: r.error || null });
+      } catch (e) { return sendError(res, e.message); }
+    }
+
+    if (p === '/api/stocks' && m === 'GET') {
+      try {
+        const hot = require('./hotboard');
+        const codes = u.query.codes ? String(u.query.codes).split(',').map((c) => ({ code: c, name: '' })) : null;
+        const r = await hot.fetchStocks({ codes: codes });
+        return sendJSON(res, { count: r.items.length, items: r.items, error: r.error || null });
+      } catch (e) { return sendError(res, e.message); }
+    }
+
+    if (p === '/api/trending' && m === 'GET') {
+      try {
+        const hot = require('./hotboard');
+        const r = await hot.fetchGithubTrending({
+          limit: Number(u.query.limit) || 15,
+          since: u.query.since || 'daily',
+          lang: u.query.lang || '',
+        });
+        return sendJSON(res, { count: r.items.length, items: r.items, error: r.error || null });
+      } catch (e) { return sendError(res, e.message); }
     }
 
     return sendError(res, 'API 不存在: ' + p, 404);
