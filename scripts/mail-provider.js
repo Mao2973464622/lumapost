@@ -323,6 +323,16 @@ function loadConfig() {
         ? process.env.MAIL_SMTP_SECURE === 'true'
         : provider.secure);
     if (provider.requireTLS) config.requireTLS = true;
+
+    // 兜底：非 465 端口一律要求 STARTTLS，否则 QQ/163 等服务器会返回 530
+    if (config.secure === false && config.port !== 465) {
+      config.requireTLS = true;
+    }
+    // 465 是「隐式 TLS」，必须 secure=true
+    if (config.port === 465 && config.secure === false) {
+      config.secure = true;
+    }
+
     if (!config.host) {
       throw new Error('邮件提供商 "' + providerKey + '" 缺少 SMTP 服务器地址。');
     }
