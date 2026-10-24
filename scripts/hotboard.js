@@ -165,8 +165,12 @@ async function fetchAllHotboards(types, opts) {
 async function fetchSteam(opts) {
   opts = opts || {};
   const limit = opts.limit || 10;
+  const host = opts.host || 'store.steampowered.com';
   try {
-    const r = await request('https://store.steampowered.com/api/featuredcategories/?cc=cn&l=chinese', { timeout: opts.timeout || 12000 });
+    const r = await request('https://' + host + '/api/featuredcategories/?cc=cn&l=chinese', {
+      timeout: opts.timeout || 20000,
+      headers: { 'Accept': 'application/json' },
+    });
     const d = JSON.parse(r.text);
     const now = new Date().toISOString();
     const out = [];
@@ -199,7 +203,10 @@ async function fetchSteam(opts) {
     }
     return { items: out, name: 'Steam', category: 'games' };
   } catch (e) {
-    return { items: [], error: e.message };
+    const msg = /TIMEDOUT|timeout/i.test(e.message)
+      ? 'Steam 商店在当前网络下不可达（可尝试更换网络或代理）'
+      : e.message;
+    return { items: [], error: msg, name: 'Steam', category: 'games' };
   }
 }
 
@@ -281,43 +288,58 @@ async function fetchStocks(opts) {
 
 /* ---------------- GitHub Trending ---------------- */
 
+/**
+ * GitHub Trending
+ * github.com 网页通常不可达，优先用 api.github.com 搜索接口近似计算趋势
+ */
 async function fetchGithubTrending(opts) {
   opts = opts || {};
   const since = opts.since || 'daily';
-  const lang = opts.lang ? '/' + opts.lang : '';
-  const url = 'https://github.com/trending' + lang + '?since=' + since;
+  const limit = opts.limit || 15;
+
+  // 按时间窗口推算起始日期
+  const days = since === 'weekly' ? 7 : (since === 'monthly' ? 30 : 1);
+  const d = new Date(Date.now() - days * 86400000);
+  const sinceDate = d.toISOString().slice(0, 10);
+
   try {
-    const r = await request(url, { timeout: opts.timeout || 15000 });
-    const html = r.text;
-    const blocks = html.split('<article class="Box-row"').slice(1);
+    // api.github.com 的 search 接口：按 star 数 + 最近推送时间排序
+    const q = encodeURIComponent('pushed:>' + sinceDate + ' stars:>500');
+    const url = 'https://api.github.com/search/repositories?q=' + q +
+      '&sort=stars&order=desc&per_page=' + Math.min(limit * 2, 50);
+
+    const r = await request(url, {
+      timeout: opts.timeout || 20000,
+      headers: {
+        'Accept': 'application/vnd.github+json',
+        'User-Agent': 'LumaPostBot/10.0',
+      },
+    });
+
+    const data = JSON.parse(r.text);
+    const list = data.items || [];
+    if (!list.length) return { items: [], error: 'API 未返回仓库', name: 'GitHub 趋势', category: 'github' };
+
     const now = new Date().toISOString();
-    const items = [];
+    const items = list.slice(0, limit).map((repo, i) => ({
+      title: String(repo.full_name || ''),
+      link: String(repo.html_url || ''),
+      summary: [
+        repo.description ? String(repo.description).slice(0, 100) : '',
+        repo.language ? repo.language : '',
+        (repo.stargazers_count || 0) + ' stars',
+      ].filter(Boolean).join(' · '),
+      publishedAt: now,
+      categories: ['github', 'trending'],
+      stars: String(repo.stargazers_count || 0),
+      rank: i + 1,
+      source: 'GitHub 趋势',
+      category: 'github',
+    }));
 
-    for (const b of blocks.slice(0, opts.limit || 15)) {
-      const repoM = b.match(/<h2[^>]*>[\s\S]*?<a[^>]+href="\/([^"]+)"[^>]*>/);
-      if (!repoM) continue;
-      const repo = repoM[1].replace(/\s+/g, '');
-      const descM = b.match(/<p[^>]*class="[^"]*color-fg-muted[^"]*"[^>]*>([\s\S]*?)<\/p>/);
-      const starM = b.match(/href="\/[^"]+\/stargazers"[^>]*>([\s\S]*?)<\/a>/);
-      const todayM = b.match(/([\d,]+)\s*stars?\s*today/);
-      const langM = b.match(/itemprop="programmingLanguage">([^<]+)</);
-
-      items.push({
-        title: repo,
-        link: 'https://github.com/' + repo,
-        summary: (descM ? descM[1].replace(/<[^>]+>/g, '').trim() : '') +
-                 (langM ? ' · ' + langM[1] : '') +
-                 (todayM ? ' · 今日 +' + todayM[1] : ''),
-        publishedAt: now,
-        categories: ['github', 'trending'],
-        stars: starM ? starM[1].replace(/<[^>]+>/g, '').trim() : '',
-        source: 'GitHub Trending',
-        category: 'github',
-      });
-    }
-    return { items: items, name: 'GitHub Trending', category: 'github' };
+    return { items: items, name: 'GitHub 趋势', category: 'github' };
   } catch (e) {
-    return { items: [], error: e.message };
+    return { items: [], error: e.message, name: 'GitHub 趋势', category: 'github' };
   }
 }
 
