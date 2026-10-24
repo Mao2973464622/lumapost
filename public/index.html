@@ -518,6 +518,23 @@ textarea.input{height:auto;min-height:84px;padding:11px var(--s-3);resize:vertic
   .mp-list{max-height:220px}
   .mp-name{display:none}
 }
+
+/* ---------- 折叠 ---------- */
+.fold-head{
+  width:100%;display:flex;align-items:center;gap:7px;
+  cursor:pointer;text-align:left;transition:background var(--fast);
+}
+.fold-head:hover{background:var(--surface-3)}
+.fold-arrow{
+  margin-left:auto;display:grid;place-items:center;
+  transition:transform var(--mid) var(--ease);
+  color:var(--text-3);flex:0 0 auto;
+}
+.fold-arrow .ic{width:12px;height:12px}
+.collapsible.collapsed .fold-body{display:none}
+.collapsible.collapsed .fold-arrow{transform:rotate(90deg)}
+.src-group-head.fold-head{background:var(--surface-2);border:0;font:inherit;color:inherit}
+.src-group-head.fold-head:hover{background:var(--surface-3)}
 </style>
 </head>
 <body>
@@ -629,11 +646,6 @@ const State = {
   themes: [],
   currentTheme: 'minimal',
   customTheme: {},
-  aggTab: 'hot',
-  trendSince: 'daily',
-  searchQuery: '',
-  searchMode: 'bing',
-  searchResults: null,
 };
 
 const API = {
@@ -675,6 +687,12 @@ function busy(on) {
 }
 const buzz = () => { try { navigator.vibrate?.(8); } catch (e) { /* noop */ } };
 
+/** 截断文本（剥离 emoji 后按字符数截断） */
+function cls(text, n) {
+  const s = String(text || '').replace(/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/gu, '').trim();
+  return s.length > n ? s.slice(0, n) + '…' : s;
+}
+
 function skeleton(rows = 4) {
   return `<div class="card card-bd">${Array.from({ length: rows }, (_, i) =>
     `<div class="sk sk-line ${i % 2 ? 'w60' : ''}"></div>`).join('')}</div>`;
@@ -694,13 +712,12 @@ const NAV = [
   { key: 'config', label: '模型', icon: 'cpu' },
   { key: 'mail', label: '邮件', icon: 'mail' },
   { key: 'sources', label: '信息源', icon: 'globe' },
-  { key: 'aggregate', label: '聚合', icon: 'bolt' },
   { key: 'schedule', label: '定时', icon: 'clock' },
   { key: 'history', label: '历史', icon: 'history' },
   { key: 'preview', label: '预览', icon: 'eye' },
   { key: 'system', label: '系统', icon: 'settings' },
 ];
-const TAB_NAV = NAV.filter(n => ['dashboard', 'config', 'aggregate', 'schedule', 'system'].includes(n.key));
+const TAB_NAV = NAV.filter(n => ['dashboard', 'config', 'sources', 'schedule', 'system'].includes(n.key));
 
 function renderNav() {
   $('#sideNav').innerHTML = `<div class="nav-label">控制台</div>` +
@@ -724,8 +741,8 @@ async function render() {
   view.innerHTML = skeleton(5);
   const fn = {
     dashboard: pageDashboard, config: pageConfig, mail: pageMail,
-    providers: pageProviders, sources: pageSources, aggregate: pageAggregate,
-    schedule: pageSchedule, history: pageHistory, preview: pagePreview, system: pageSystem,
+    providers: pageProviders, sources: pageSources, schedule: pageSchedule,
+    history: pageHistory, preview: pagePreview, system: pageSystem,
   }[State.page];
   try {
     view.innerHTML = await fn();
@@ -932,52 +949,101 @@ function collectAI() {
 }
 
 /* ============ 邮件配置 ============ */
+/** 与 scripts/mail-provider.js 的 PROVIDERS 保持一致（18 家） */
 const MAIL_LIST = [
-  { k: 'qq', n: 'QQ 邮箱' }, { k: 'netease', n: '网易 163' },
-  { k: 'gmail', n: 'Gmail' }, { k: 'outlook', n: 'Outlook' },
-  { k: 'custom-smtp', n: '自定义 SMTP' },
+  // SMTP 类
+  { k: 'qq', n: 'QQ 邮箱', t: 'smtp', hint: '需在邮箱设置里开启 SMTP 服务' },
+  { k: 'netease', n: '网易 163', t: 'smtp' },
+  { k: 'netease-126', n: '网易 126', t: 'smtp' },
+  { k: 'netease-yeah', n: '网易 yeah', t: 'smtp' },
+  { k: 'gmail', n: 'Gmail', t: 'smtp', hint: '需使用「应用专用密码」' },
+  { k: 'outlook', n: 'Outlook / Hotmail', t: 'smtp' },
+  { k: 'yahoo', n: 'Yahoo Mail', t: 'smtp' },
+  { k: 'aliyun', n: '阿里云邮箱', t: 'smtp' },
+  { k: 'qq-enterprise', n: '腾讯企业邮箱', t: 'smtp' },
+  { k: 'custom-smtp', n: '自定义 SMTP', t: 'smtp', hint: '需填服务器地址与端口' },
+  // API 类
+  { k: 'resend', n: 'Resend', t: 'api', hint: 'API Key（re_ 开头）' },
+  { k: 'sendgrid', n: 'SendGrid', t: 'api', hint: 'API Key（SG. 开头）' },
+  { k: 'mailgun', n: 'Mailgun', t: 'api', hint: 'API Key' },
+  { k: 'postmark', n: 'Postmark', t: 'api', hint: 'Server Token' },
+  { k: 'graph', n: 'Microsoft Graph', t: 'api', hint: 'Office365 应用凭证' },
+  { k: 'aliyun-dm', n: '阿里云邮件推送', t: 'api', hint: 'AccessKey' },
+  { k: 'qcloud-ses', n: '腾讯云 SES', t: 'api', hint: 'SecretId / SecretKey' },
+  { k: 'mailjet', n: 'Mailjet', t: 'api', hint: 'API Key / Secret' },
 ];
+
+function mailMeta(key) {
+  return MAIL_LIST.find((x) => x.k === key) || MAIL_LIST[0];
+}
 
 async function pageMail() {
   const m = State.config.mail || {};
+  const meta = mailMeta(m.provider);
+  const isSmtp = meta.t === 'smtp';
+  const isCustomSmtp = m.provider === 'custom-smtp';
+  const isApi = meta.t === 'api';
   const hasPass = !!m.pass;
-  const isCustom = m.provider === 'custom-smtp';
+  const hasUser = !!m.user;
 
-  return pageHead('邮件服务', '配置发件邮箱与收件人') +
+  // 按类型分组的下拉
+  const optGroup = (label, list) =>
+    `<optgroup label="${esc(label)}">` +
+    list.map((x) => opt(x.k, x.n, m.provider)).join('') +
+    `</optgroup>`;
+  const smtpList = MAIL_LIST.filter((x) => x.t === 'smtp');
+  const apiList = MAIL_LIST.filter((x) => x.t === 'api');
+
+  // 凭据字段：SMTP 是「授权码/密码」，API 是「API Key」
+  const passLabel = isApi ? 'API Key / Token' : 'SMTP 授权码';
+  const passHint = hasPass ? '已配置，留空则不修改' : (meta.hint || '必填');
+
+  return pageHead('邮件服务', '配置发件邮箱与收件人（共 ' + MAIL_LIST.length + ' 家服务商）') +
+
     section('发件配置', `<div class="card"><div class="card-bd">
       ${field('邮件服务商', `<select class="select" id="f-mail-provider">
-        ${MAIL_LIST.map(x => opt(x.k, x.n, m.provider)).join('')}
-      </select>`)}
+        ${optGroup('SMTP 邮箱（' + smtpList.length + ' 家）', smtpList)}
+        ${optGroup('API 服务（' + apiList.length + ' 家）', apiList)}
+      </select>`, meta.hint || '')}
 
-      ${field('发件邮箱', `<input class="input" id="f-mail-user" type="email" value="${esc(m.user || '')}" placeholder="you@qq.com" autocomplete="off">`)}
-      ${field('授权码 / 密码', `<div class="input-wrap">
-        <input class="input" id="f-mail-pass" type="password" value="" placeholder="${hasPass ? '已保存，留空保持不变' : 'SMTP 授权码'}" autocomplete="off">
+      ${isSmtp ? field('发件邮箱', `<input class="input" id="f-mail-user" type="email" value="${esc(m.user || '')}" placeholder="you@qq.com" autocomplete="off">`,
+        hasUser ? '已配置' : '必填') : ''}
+
+      ${field(passLabel, `<div class="input-wrap">
+        <input class="input" id="f-mail-pass" type="password" value="" placeholder="${esc(hasPass ? '已保存，留空保持不变' : (isApi ? '粘贴 API Key' : 'SMTP 授权码'))}" autocomplete="off">
         <button class="input-eye" data-act="eye" data-target="f-mail-pass" type="button" aria-label="显示密码">${ic('eye')}</button>
-      </div>`, hasPass ? '已配置，留空则不修改' : '必填')}
+      </div>`, passHint)}
 
       <div class="divider"></div>
 
-      ${field('收件邮箱', `<input class="input" id="f-mail-to" type="email" value="${esc(m.to || '')}" placeholder="留空则发给自己">`, '可多个，逗号分隔')}
+      ${field('收件邮箱', `<input class="input" id="f-mail-to" type="email" value="${esc(m.to || '')}" placeholder="留空则发给发件邮箱">`, '可多个，逗号分隔')}
       ${field('发件人显示名 / 地址', `<input class="input" id="f-mail-from" value="${esc(m.from || '')}" placeholder="留空使用发件邮箱">`)}
     </div></div>`, 'mail') +
+
     await buildThemeSection(m) +
-            section('SMTP 高级（仅自定义）', `<div class="card"><div class="card-bd ${isCustom ? '' : 'hidden'}" id="smtpBox">
-      <div class="form-row">
-        ${field('SMTP 服务器', `<input class="input mono" id="f-mail-smtpHost" value="${esc(m.smtpHost || '')}" placeholder="smtp.example.com">`)}
-        ${field('端口', `<input class="input" id="f-mail-smtpPort" type="number" min="0" max="65535" value="${m.smtpPort || 465}">`)}
+
+    section('SMTP 高级设置', `<div class="card">
+      <div class="card-bd ${isCustomSmtp ? '' : 'hidden'}" id="smtpBox">
+        <div class="form-row">
+          ${field('SMTP 服务器', `<input class="input mono" id="f-mail-smtpHost" value="${esc(m.smtpHost || '')}" placeholder="smtp.example.com">`)}
+          ${field('端口', `<input class="input" id="f-mail-smtpPort" type="number" min="0" max="65535" value="${m.smtpPort || 465}">`)}
+        </div>
+        <label class="switch mt-4">
+          <input type="checkbox" id="f-mail-smtpSecure" ${m.smtpSecure !== false ? 'checked' : ''}>
+          <span class="switch-track"></span>
+          <span class="switch-text">使用 SSL/TLS（465 端口通常开启，587 端口关闭并自动 STARTTLS）</span>
+        </label>
       </div>
-      <label class="switch mt-4">
-        <input type="checkbox" id="f-mail-smtpSecure" ${m.smtpSecure !== false ? 'checked' : ''}>
-        <span class="switch-track"></span>
-        <span class="switch-text">使用 SSL/TLS（端口 465 通常开启）</span>
-      </label>
-    </div>
-    <div class="card-bd ${isCustom ? 'hidden' : ''}" id="smtpHint">
-      <div class="banner"><div class="banner-ico">${ic('plus-info')}</div><div>
-        <div class="banner-title">使用预设服务商</div>
-        <div class="banner-desc">服务器地址与端口已自动匹配。如需指定，请把服务商切换为「自定义 SMTP」。</div>
-      </div></div>
-    </div></div>`, 'settings') +
+      <div class="card-bd ${isCustomSmtp ? 'hidden' : ''}" id="smtpHint">
+        <div class="banner"><div class="banner-ico">${ic('plus-info')}</div><div>
+          <div class="banner-title">${isApi ? 'API 型服务' : '使用预设邮箱'}</div>
+          <div class="banner-desc">${isApi
+            ? '该服务通过 HTTPS + API Key 发送，无需 SMTP 服务器。服务器地址与端口由系统自动处理。'
+            : '服务器地址与端口已自动匹配。如需手动指定，请把服务商切换为「自定义 SMTP」。'}</div>
+        </div></div>
+      </div>
+    </div>`, 'settings') +
+
     `<div class="sticky-actions">
       <button class="btn btn-primary" data-act="save-mail">${ic('save')}保存配置</button>
       <button class="btn btn-secondary" data-act="test-mail">${ic('send')}发送测试</button>
@@ -986,16 +1052,21 @@ async function pageMail() {
 
 function collectMail() {
   const g = (id) => $('#' + id)?.value?.trim?.() ?? '';
+  const provider = g('f-mail-provider');
+  const meta = mailMeta(provider);
   const out = {
-    provider: g('f-mail-provider'),
-    user: g('f-mail-user'),
+    provider: provider,
     to: g('f-mail-to'),
     from: g('f-mail-from'),
-    smtpHost: g('f-mail-smtpHost'),
-    smtpPort: parseInt($('#f-mail-smtpPort')?.value || '0', 10) || 0,
-    smtpSecure: !!$('#f-mail-smtpSecure')?.checked,
     theme: $('#f-mail-theme')?.value || 'minimal',
   };
+  // SMTP 才有发件邮箱与服务器设置
+  if (meta.t === 'smtp') {
+    out.user = g('f-mail-user');
+    out.smtpHost = g('f-mail-smtpHost');
+    out.smtpPort = parseInt($('#f-mail-smtpPort')?.value || '0', 10) || 0;
+    out.smtpSecure = !!$('#f-mail-smtpSecure')?.checked;
+  }
   const pass = g('f-mail-pass');
   if (pass) out.pass = pass;
   return { mail: out };
@@ -1008,6 +1079,35 @@ const CAT_ICON = {
   law: 'doc', education: 'doc', sports: 'bolt', entertainment: 'image',
   military: 'warning', space: 'space', games: 'puzzle', auto: 'bolt', life: 'moon',
 };
+
+
+/* ---------- 信息源页懒渲染辅助 ---------- */
+function renderSrcItems(list, allRss) {
+  return list.map((s) => {
+    const idx = allRss.indexOf(s);
+    return `<div class="list-item" data-src-row="${idx}">
+      <label class="switch" style="flex:0 0 auto">
+        <input type="checkbox" data-toggle-src="${idx}" ${s.enabled !== false ? 'checked' : ''}>
+        <span class="switch-track"></span>
+      </label>
+      <div class="li-main">
+        <div class="li-title">${esc(s.name || '未命名')}</div>
+        <div class="li-meta mono">${esc(String(s.url || '').replace(/^https?:\/\//, '').slice(0, 46))}</div>
+      </div>
+      <button class="icon-btn" data-act="test-src" data-idx="${idx}" title="测试">${ic('flask')}</button>
+      <button class="icon-btn" data-act="del-src" data-idx="${idx}" title="删除">${ic('trash')}</button>
+    </div>`;
+  }).join('');
+}
+
+function renderCatChips(items, existing) {
+  return items.map((s) => {
+    const has = existing.has(s.url);
+    return `<button class="src-chip ${has ? 'added' : ''}" data-add-src="${esc(s.url)}" data-name="${esc(s.name)}" data-cat="${esc(s.category)}" ${has ? 'disabled' : ''}>
+      ${has ? ic('check') : ic('plus-info')}${esc(s.name)}
+    </button>`;
+  }).join('');
+}
 
 async function pageSources() {
   const [src, cat] = await Promise.all([
@@ -1030,30 +1130,21 @@ async function pageSources() {
     (byCat[c] = byCat[c] || []).push(s);
   }
 
+  // 分组头始终渲染，内容懒加载
   const srcRows = rss.length
-    ? Object.keys(byCat).sort().map((c) => `
-      <div class="src-group">
-        <div class="src-group-head">
+    ? Object.keys(byCat).sort().map((c) => {
+        const isOpen = State.srcOpen && State.srcOpen[c];
+        return `
+      <div class="src-group collapsible ${isOpen ? '' : 'collapsed'}" data-src-cat="${esc(c)}">
+        <button type="button" class="src-group-head fold-head" data-open-src="${esc(c)}">
           ${ic(CAT_ICON[c] || 'globe')}
           <span>${esc(cats[c] || c)}</span>
           <span class="badge">${byCat[c].length}</span>
-        </div>
-        ${byCat[c].map((s) => {
-          const idx = rss.indexOf(s);
-          return `<div class="list-item" data-src-row="${idx}">
-            <label class="switch" style="flex:0 0 auto">
-              <input type="checkbox" data-toggle-src="${idx}" ${s.enabled !== false ? 'checked' : ''}>
-              <span class="switch-track"></span>
-            </label>
-            <div class="li-main">
-              <div class="li-title">${esc(s.name || '未命名')}</div>
-              <div class="li-meta mono">${esc(String(s.url || '').replace(/^https?:\/\//, '').slice(0, 46))}</div>
-            </div>
-            <button class="icon-btn" data-act="test-src" data-idx="${idx}" title="测试">${ic('flask')}</button>
-            <button class="icon-btn" data-act="del-src" data-idx="${idx}" title="删除">${ic('trash')}</button>
-          </div>`;
-        }).join('')}
-      </div>`).join('')
+          <span class="fold-arrow">${ic('arrow-right')}</span>
+        </button>
+        <div class="fold-body" id="srcbody-${esc(c)}">${isOpen ? renderSrcItems(byCat[c], rss) : ''}</div>
+      </div>`;
+      }).join('')
     : emptyState('globe', '还没有信息源', '点击下方「导入推荐源」一键添加 34 个实测可用的信息源。');
 
   // 内置库按分类分组
@@ -1061,19 +1152,17 @@ async function pageSources() {
     const items = State.catalog.filter((s) => s.category === c);
     if (!items.length) return '';
     const existing = new Set(rss.map((s) => s.url));
-    return `<div class="cat-block">
+    const isOpen = State.catOpen && State.catOpen[c];
+    return `<div class="cat-block collapsible ${isOpen ? '' : 'collapsed'}" data-cat-block="${esc(c)}">
       <div class="cat-block-head">
-        <span class="cat-block-title">${ic(CAT_ICON[c] || 'globe')}${esc(cats[c])}</span>
+        <button type="button" class="cat-block-title fold-head" data-open-cat="${esc(c)}" style="background:none;border:0;padding:0;cursor:pointer">
+          ${ic(CAT_ICON[c] || 'globe')}${esc(cats[c])}
+          <span class="badge" style="margin-left:6px">${items.length}</span>
+          <span class="fold-arrow">${ic('arrow-right')}</span>
+        </button>
         <button class="btn btn-sm btn-ghost" data-act="import-cat" data-cat="${c}">全部导入</button>
       </div>
-      <div class="cat-chips">
-        ${items.map((s) => {
-          const has = existing.has(s.url);
-          return `<button class="src-chip ${has ? 'added' : ''}" data-add-src="${esc(s.url)}" data-name="${esc(s.name)}" data-cat="${esc(s.category)}" ${has ? 'disabled' : ''}>
-            ${has ? ic('check') : ic('plus-info')}${esc(s.name)}
-          </button>`;
-        }).join('')}
-      </div>
+      <div class="cat-chips fold-body" id="catbody-${esc(c)}">${isOpen ? renderCatChips(items, existing) : ''}</div>
     </div>`;
   }).join('');
 
@@ -1679,238 +1768,6 @@ function collectSchedule() {
   return { schedule, delivery, app: { autoSchedule: !!$('#f-auto')?.checked } };
 }
 
-/* ============ 聚合页：热榜 / 游戏 / 行情 / 趋势 / 搜索 ============ */
-const AGG_TABS = [
-  { key: 'hot', label: '中文热榜', icon: 'bolt' },
-  { key: 'stocks', label: '股市', icon: 'chart' },
-  { key: 'games', label: '游戏', icon: 'puzzle' },
-  { key: 'trending', label: 'GitHub', icon: 'code' },
-  { key: 'search', label: '搜索', icon: 'globe' },
-];
-
-async function pageAggregate() {
-  const tab = State.aggTab || 'hot';
-
-  const tabs = `<div class="seg" id="aggTabs" style="width:100%">
-    ${AGG_TABS.map((t) => `<button class="${tab === t.key ? 'active' : ''}" data-agg="${t.key}" style="flex:1">
-      ${ic(t.icon)}${t.label}
-    </button>`).join('')}
-  </div>`;
-
-  let body = '';
-  try {
-    if (tab === 'hot') body = await aggHot();
-    else if (tab === 'stocks') body = await aggStocks();
-    else if (tab === 'games') body = await aggGames();
-    else if (tab === 'trending') body = await aggTrending();
-    else body = aggSearch();
-  } catch (e) {
-    body = `<div class="card">${emptyState('warning', '加载失败', e.message)}</div>`;
-  }
-
-  return pageHead('聚合', '热榜 · 行情 · 游戏 · 趋势 · 搜索',
-    `<button class="btn btn-secondary btn-sm" data-act="reload">${ic('refresh')}刷新</button>`) +
-    `<div class="section">${tabs}</div>` +
-    `<div id="aggBody">${body}</div>`;
-}
-
-/* ---------- 热榜 ---------- */
-async function aggHot() {
-  const d = await API.get('/api/hotboard/items?limit=10');
-  const items = d.items || [];
-  if (!items.length) return emptyState('bolt', '暂无热榜数据', '请检查网络或稍后重试');
-
-  // 按来源分组
-  const groups = {};
-  items.forEach((it) => {
-    (groups[it.source] = groups[it.source] || []).push(it);
-  });
-
-  return Object.keys(groups).map((src) => `
-    <div class="card" style="margin-bottom:var(--s-3)">
-      <div class="card-hd">
-        <div class="card-hd-title">${esc(src)}</div>
-        <span class="badge brand">${groups[src].length}</span>
-      </div>
-      <div class="list">
-        ${groups[src].map((it, i) => `
-          <a class="list-item clickable" href="${esc(it.link || '#')}" target="_blank" rel="noopener">
-            <div class="li-av">${String(i + 1).padStart(2, '0')}</div>
-            <div class="li-main">
-              <div class="li-title">${esc(it.title)}</div>
-              ${it.summary ? `<div class="li-meta">${esc(cls(it.summary, 60))}</div>` : ''}
-            </div>
-          </a>`).join('')}
-      </div>
-    </div>`).join('');
-}
-
-/* ---------- 股市 ---------- */
-async function aggStocks() {
-  const d = await API.get('/api/stocks');
-  const items = d.items || [];
-  if (!items.length) return emptyState('chart', '暂无行情', d.error || '接口未返回数据');
-
-  return `<div class="card"><div class="list">
-    ${items.map((s) => {
-      const pct = s.pct != null ? Number(s.pct) : null;
-      const up = pct != null ? pct >= 0 : true;
-      const color = up ? 'var(--err)' : 'var(--ok)';
-      const arrow = up ? '▲' : '▼';
-      return `<div class="list-item">
-        <div class="li-main">
-          <div class="li-title">${esc(s.name)}</div>
-          <div class="li-meta mono">${esc(s.code || '')}</div>
-        </div>
-        <div style="text-align:right">
-          <div class="mono" style="font-size:15px;font-weight:700;color:var(--text)">${s.current != null ? Number(s.current).toFixed(2) : '-'}</div>
-          <div class="mono" style="font-size:11px;font-weight:700;color:${color};margin-top:2px">
-            ${arrow} ${pct != null ? (pct >= 0 ? '+' : '') + pct.toFixed(2) + '%' : '-'}
-          </div>
-        </div>
-      </div>`;
-    }).join('')}
-  </div></div>`;
-}
-
-/* ---------- 游戏 ---------- */
-async function aggGames() {
-  const [steam, epic] = await Promise.all([
-    API.get('/api/steam?limit=8').catch(() => ({ items: [] })),
-    API.get('/api/epic?limit=10').catch(() => ({ items: [] })),
-  ]);
-
-  const card = (title, data, icon, showPrice) => {
-    const items = data.items || [];
-    if (!items.length) {
-      return `<div class="card" style="margin-bottom:var(--s-3)">
-        <div class="card-hd"><div class="card-hd-title">${title}</div></div>
-        ${emptyState(icon, '暂无数据', data.error || '接口未返回')}
-      </div>`;
-    }
-    return `<div class="card" style="margin-bottom:var(--s-3)">
-      <div class="card-hd">
-        <div class="card-hd-title">${title}</div>
-        <span class="badge brand">${items.length}</span>
-      </div>
-      <div class="list">
-        ${items.map((it) => `
-          <a class="list-item clickable" href="${esc(it.link || '#')}" target="_blank" rel="noopener">
-            <div class="li-av">${ic(icon)}</div>
-            <div class="li-main">
-              <div class="li-title">${esc(it.title)}</div>
-              <div class="li-meta">${esc(it.summary || '')}</div>
-            </div>
-            ${showPrice && it.discount > 0 ? `<span class="badge err">-${it.discount}%</span>` : ''}
-          </a>`).join('')}
-      </div>
-    </div>`;
-  };
-
-  return card('Steam 特惠 / 新品 / 热销', steam, 'puzzle', true) + card('Epic 限时免费', epic, 'image', false);
-}
-
-/* ---------- GitHub Trending ---------- */
-async function aggTrending() {
-  const since = State.trendSince || 'daily';
-  const d = await API.get('/api/trending?limit=20&since=' + since);
-  const items = d.items || [];
-
-  const sinceTabs = `<div class="seg" style="margin-bottom:var(--s-3)">
-    ${[['daily', '今日'], ['weekly', '本周'], ['monthly', '本月']].map(([k, n]) =>
-      `<button class="${since === k ? 'active' : ''}" data-trend-since="${k}">${n}</button>`).join('')}
-  </div>`;
-
-  if (!items.length) return sinceTabs + emptyState('code', '暂无趋势数据', d.error || '接口未返回');
-
-  return sinceTabs + `<div class="card"><div class="list">
-    ${items.map((it, i) => `
-      <a class="list-item clickable" href="${esc(it.link || '#')}" target="_blank" rel="noopener">
-        <div class="li-av">${String(i + 1).padStart(2, '0')}</div>
-        <div class="li-main">
-          <div class="li-title mono">${esc(it.title)}</div>
-          <div class="li-meta">${esc(cls(it.summary || '', 70))}</div>
-        </div>
-      </a>`).join('')}
-  </div></div>`;
-}
-
-/* ---------- 搜索 ---------- */
-function aggSearch() {
-  const q = State.searchQuery || '';
-  const mode = State.searchMode || 'bing';
-  const results = State.searchResults || null;
-
-  const modes = [['bing', 'Bing'], ['google', 'Google'], ['baidu', '百度'], ['ai', 'AI 搜索']];
-
-  let resultHtml = emptyState('globe', '输入关键词开始搜索', '支持 Bing / Google / 百度 / 大模型搜索');
-  if (results) {
-    if (!results.length) {
-      resultHtml = emptyState('empty-box', '没有结果', '换个关键词试试，或切换搜索引擎');
-    } else {
-      resultHtml = `<div class="card"><div class="list">
-        ${results.map((it) => `
-          <a class="list-item clickable" href="${esc(it.url || '#')}" target="_blank" rel="noopener">
-            <div class="li-av">${ic('globe')}</div>
-            <div class="li-main">
-              <div class="li-title">${esc(it.title)}</div>
-              ${it.snippet ? `<div class="li-meta">${esc(cls(it.snippet, 90))}</div>` : ''}
-              ${it.source ? `<div class="li-meta"><span class="badge">${esc(it.source)}</span></div>` : ''}
-            </div>
-          </a>`).join('')}
-      </div></div>`;
-    }
-  }
-
-  return `
-    <div class="card" style="margin-bottom:var(--s-3)"><div class="card-bd">
-      <div style="display:flex;gap:8px">
-        <input class="input" id="searchInput" value="${esc(q)}" placeholder="输入关键词，回车搜索" autocomplete="off">
-        <button class="btn btn-primary" data-act="do-search" style="flex:0 0 auto">${ic('globe')}搜索</button>
-      </div>
-      <div class="chips mt-3">
-        ${modes.map(([k, n]) => `<button class="chip ${mode === k ? 'active' : ''}" data-search-mode="${k}">${n}</button>`).join('')}
-      </div>
-    </div></div>
-    <div id="searchResults">${resultHtml}</div>`;
-}
-
-async function doSearch() {
-  const q = ($('#searchInput')?.value || '').trim();
-  if (!q) return toast('请输入关键词', 'err');
-  State.searchQuery = q;
-  const box = $('#searchResults');
-  if (box) box.innerHTML = skeleton(3);
-  try {
-    busy(true);
-    const d = await API.get('/api/search?q=' + encodeURIComponent(q) + '&mode=' + (State.searchMode || 'bing') + '&limit=15');
-    busy(false);
-    State.searchResults = d.items || [];
-    if (box) box.innerHTML = aggSearchHtml();
-    toast('找到 ' + State.searchResults.length + ' 条结果', 'ok');
-  } catch (e) {
-    busy(false);
-    State.searchResults = [];
-    if (box) box.innerHTML = `<div class="card">${emptyState('warning', '搜索失败', e.message)}</div>`;
-  }
-}
-
-function aggSearchHtml() {
-  const results = State.searchResults || [];
-  if (!results.length) return emptyState('empty-box', '没有结果', '换个关键词试试');
-  return `<div class="card"><div class="list">
-    ${results.map((it) => `
-      <a class="list-item clickable" href="${esc(it.url || '#')}" target="_blank" rel="noopener">
-        <div class="li-av">${ic('globe')}</div>
-        <div class="li-main">
-          <div class="li-title">${esc(it.title)}</div>
-          ${it.snippet ? `<div class="li-meta">${esc(cls(it.snippet, 90))}</div>` : ''}
-          ${it.source ? `<div class="li-meta"><span class="badge">${esc(it.source)}</span></div>` : ''}
-        </div>
-      </a>`).join('')}
-  </div></div>`;
-}
-
 /* ============ 历史 ============ */
 async function pageHistory() {
   const h = await API.get('/api/config/history').catch(() => ({ fetchHistory: [], sendHistory: [] }));
@@ -2162,6 +2019,11 @@ async function loadModelList(providerKey) {
 }
 
 /* ============ 通用保存 ============ */
+/** 通用保存入口（供无专属 handler 的场景调用） */
+async function doSave(patch, msg) {
+  return savePatch(patch || {}, msg || '已保存');
+}
+
 async function savePatch(patch, okMsg) {
   try {
     busy(true);
@@ -2317,7 +2179,6 @@ async function __oldSaveSources() {
 
 /* ---------- 信息源 v5.1 事件 ---------- */
 const SRC_ACTIONS = {
-  'do-search': () => doSearch(),
   'toggle-custom': () => {
     const el = $('#customEditor');
     if (el) el.classList.toggle('hidden');
@@ -2584,25 +2445,50 @@ function bind() {
       return;
     }
 
-    /* 聚合页 Tab */
-    const aggBtn = e.target.closest('[data-agg]');
-    if (aggBtn) {
-      State.aggTab = aggBtn.dataset.agg;
-      return render();
+    /* 展开/收起已选源分组（懒渲染） */
+    const openSrc = e.target.closest('[data-open-src]');
+    if (openSrc) {
+      const cat = openSrc.dataset.openSrc;
+      const block = openSrc.closest('.collapsible');
+      const body = document.getElementById('srcbody-' + cat);
+      State.srcOpen = State.srcOpen || {};
+      if (block.classList.contains('collapsed')) {
+        block.classList.remove('collapsed');
+        State.srcOpen[cat] = true;
+        if (body && !body.innerHTML.trim()) {
+          const cats = {};
+          (State.srcCache || []).forEach((x) => {
+            const k = x.category || 'news';
+            (cats[k] = cats[k] || []).push(x);
+          });
+          body.innerHTML = renderSrcItems(cats[cat] || [], State.srcCache || []);
+        }
+      } else {
+        block.classList.add('collapsed');
+        State.srcOpen[cat] = false;
+      }
+      return;
     }
 
-    /* 趋势周期 */
-    const tsBtn = e.target.closest('[data-trend-since]');
-    if (tsBtn) {
-      State.trendSince = tsBtn.dataset.trendSince;
-      return render();
-    }
-
-    /* 搜索模式 */
-    const smBtn = e.target.closest('[data-search-mode]');
-    if (smBtn) {
-      State.searchMode = smBtn.dataset.searchMode;
-      $$('[data-search-mode]').forEach((b) => b.classList.toggle('active', b === smBtn));
+    /* 展开/收起内置源库（懒渲染） */
+    const openCat = e.target.closest('[data-open-cat]');
+    if (openCat) {
+      const cat = openCat.dataset.openCat;
+      const block = openCat.closest('.collapsible');
+      const body = document.getElementById('catbody-' + cat);
+      State.catOpen = State.catOpen || {};
+      if (block.classList.contains('collapsed')) {
+        block.classList.remove('collapsed');
+        State.catOpen[cat] = true;
+        if (body && !body.innerHTML.trim()) {
+          const items = (State.catalog || []).filter((x) => x.category === cat);
+          const existing = new Set((State.srcCache || []).map((x) => x.url));
+          body.innerHTML = renderCatChips(items, existing);
+        }
+      } else {
+        block.classList.add('collapsed');
+        State.catOpen[cat] = false;
+      }
       return;
     }
 
@@ -2631,13 +2517,6 @@ function bind() {
     }
   });
 
-  view.addEventListener('keydown', (e) => {
-    if (e.target.id === 'searchInput' && e.key === 'Enter') {
-      e.preventDefault();
-      doSearch();
-    }
-  });
-
   view.addEventListener('change', (e) => {
     if (e.target.id === 'f-ai-provider') {
       State.models = [];
@@ -2649,11 +2528,34 @@ function bind() {
       if (base) base.placeholder = e.target.value === 'custom' ? 'https://your-api.com/v1' : '留空使用官方地址';
     }
     if (e.target.id === 'f-mail-provider') {
-      const box = $('#smtpBox');
-      const hint = $('#smtpHint');
-      const isCustom = e.target.value === 'custom-smtp';
-      if (box) box.classList.toggle('hidden', !isCustom);
-      if (hint) hint.classList.toggle('hidden', isCustom);
+      // 服务商类型变化会影响字段显示（SMTP 需要发件邮箱、API 不需要）
+      // 先暂存用户已填内容，再重渲染
+      const keep = {
+        user: $('#f-mail-user')?.value || '',
+        pass: $('#f-mail-pass')?.value || '',
+        to: $('#f-mail-to')?.value || '',
+        from: $('#f-mail-from')?.value || '',
+        smtpHost: $('#f-mail-smtpHost')?.value || '',
+        smtpPort: $('#f-mail-smtpPort')?.value || '',
+        smtpSecure: !!$('#f-mail-smtpSecure')?.checked,
+        theme: $('#f-mail-theme')?.value || 'minimal',
+      };
+      State.config.mail = {
+        ...(State.config.mail || {}),
+        provider: e.target.value,
+      };
+      render().then(() => {
+        const set = (id, v) => { const el = $('#' + id); if (el && v) el.value = v; };
+        set('f-mail-user', keep.user);
+        set('f-mail-pass', keep.pass);
+        set('f-mail-to', keep.to);
+        set('f-mail-from', keep.from);
+        set('f-mail-smtpHost', keep.smtpHost);
+        set('f-mail-smtpPort', keep.smtpPort);
+        const sc = $('#f-mail-smtpSecure');
+        if (sc) sc.checked = keep.smtpSecure;
+        set('f-mail-theme', keep.theme);
+      });
     }
   });
 }
