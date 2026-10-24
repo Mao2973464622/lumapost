@@ -17,7 +17,7 @@ const CONFIG_DIR = path.join(ROOT, 'config');
 const CONFIG_FILE = path.join(CONFIG_DIR, 'app.json');
 
 const DEFAULT_CONFIG = {
-  version: '5.0.0',
+  version: '5.2.0',
 
   ai: {
     provider: 'deepseek',
