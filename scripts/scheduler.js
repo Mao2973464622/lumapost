@@ -48,18 +48,37 @@ function runScript(script, args) {
   return new Promise((resolve) => {
     let out = '';
     let child;
+    let settled = false;
+    // 默认 15 分钟超时，防止 AI 接口挂起导致进程僵死
+    const TIMEOUT_MS = 15 * 60 * 1000;
+    let timer = null;
+
+    const finish = (result) => {
+      if (settled) return;
+      settled = true;
+      if (timer) clearTimeout(timer);
+      resolve(result);
+    };
+
     try {
       child = spawn(process.execPath, [path.join(ROOT, 'scripts', script)].concat(args || []), {
         cwd: ROOT,
         env: process.env,
       });
     } catch (e) {
-      return resolve({ ok: false, error: e.message });
+      return finish({ ok: false, error: e.message });
     }
+
+    timer = setTimeout(() => {
+      log('脚本 ' + script + ' 超时（' + (TIMEOUT_MS / 60000) + ' 分钟），强制终止', 'error');
+      try { child.kill('SIGKILL'); } catch (e) { /* noop */ }
+      finish({ ok: false, error: '执行超时（' + (TIMEOUT_MS / 60000) + ' 分钟）', output: out.slice(-500) });
+    }, TIMEOUT_MS);
+
     child.stdout.on('data', (d) => { out += d.toString(); });
     child.stderr.on('data', (d) => { out += d.toString(); });
-    child.on('error', (e) => resolve({ ok: false, error: e.message }));
-    child.on('close', (code) => resolve({ ok: code === 0, code: code, output: out.slice(-500) }));
+    child.on('error', (e) => finish({ ok: false, error: e.message }));
+    child.on('close', (code) => finish({ ok: code === 0, code: code, output: out.slice(-500) }));
   });
 }
 
