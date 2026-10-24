@@ -17,7 +17,7 @@ const CONFIG_DIR = path.join(ROOT, 'config');
 const CONFIG_FILE = path.join(CONFIG_DIR, 'app.json');
 
 const DEFAULT_CONFIG = {
-  version: '7.0.0',
+  version: '8.0.0',
 
   ai: {
     provider: 'deepseek',
@@ -38,6 +38,7 @@ const DEFAULT_CONFIG = {
     smtpHost: '',
     smtpPort: 0,
     smtpSecure: true,
+    theme: 'minimal',   // minimal | dark | paper
   },
 
   weather: { lat: '28.20', lon: '112.97', city: '湖南长沙' },

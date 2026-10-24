@@ -116,6 +116,7 @@ function sanitizeConfig(input) {
       smtpHost: str(input.mail.smtpHost, 200),
       smtpPort: num(input.mail.smtpPort, 0, 0, 65535),
       smtpSecure: bool(input.mail.smtpSecure, true),
+      theme: ['minimal', 'dark', 'paper'].indexOf(str(input.mail.theme)) >= 0 ? str(input.mail.theme) : 'minimal',
     };
   }
 
