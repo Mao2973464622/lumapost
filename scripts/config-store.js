@@ -54,14 +54,21 @@ const DEFAULT_CONFIG = {
     enabled: ['ai', 'hardware', 'github', 'news', 'games', 'finance', 'auto', 'internet', 'life', 'space'],
   },
 
-  sources: {
-    enableRss: true,
-    rss: [
-      { name: '机器之心', url: 'https://www.jiqizhixin.com/rss', category: 'ai', enabled: true },
-      { name: '36氪', url: 'https://36kr.com/feed', category: 'finance', enabled: true },
-      { name: 'Hacker News', url: 'https://hnrss.org/frontpage', category: 'github', enabled: true },
-      { name: 'IT之家', url: 'https://www.ithome.com/rss/', category: 'hardware', enabled: true },
-    ],
+  sources: (function () {
+    let rec = [];
+    try {
+      const cat = require('./sources-catalog');
+      rec = cat.getRecommended(2).map(function (s) {
+        return { name: s.name, url: s.url, category: s.category, enabled: true };
+      });
+    } catch (e) { rec = []; }
+    return { enableRss: true, rss: rec };
+  })(),
+
+  search: {
+    engine: 'bing',      // bing | google | baidu | ddg
+    aiSearch: true,      // 是否同时用大模型搜索
+    useForNews: false,   // 抓取时是否把搜索结果并入
   },
 
   schedule: {
