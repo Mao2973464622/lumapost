@@ -19,3 +19,9 @@ server.log
 Thumbs.db
 .idea/
 .vscode/
+
+# 调试脚本（禁止提交）
+nm_*.js
+smtp_*.js
+debug*.js
+test_*.js
