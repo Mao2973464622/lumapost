@@ -411,6 +411,36 @@ textarea.input{height:auto;min-height:84px;padding:11px var(--s-3);resize:vertic
 .src-chip .ic{width:11px;height:11px;opacity:.7}
 .src-chip:hover:not(:disabled){border-color:var(--brand-line);color:var(--brand-1);background:var(--brand-soft)}
 .src-chip.added{opacity:.45;pointer-events:none;border-style:dashed}
+
+/* ---------- 邮件主题选择器 ---------- */
+.theme-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:var(--s-3)}
+.theme-card{
+  text-align:left;padding:var(--s-3);border-radius:var(--r-md);
+  background:var(--surface-2);border:1.5px solid var(--line);
+  transition:all var(--mid) var(--ease);position:relative;overflow:hidden;
+}
+.theme-card:hover{transform:translateY(-2px);border-color:var(--line-strong);box-shadow:var(--sh-2)}
+.theme-card:active{transform:scale(.98)}
+.theme-card.active{border-color:var(--brand-1);box-shadow:0 0 0 3px var(--brand-soft)}
+.theme-card.active::after{
+  content:'';position:absolute;top:9px;right:9px;width:18px;height:18px;border-radius:50%;
+  background:var(--grad-brand);
+  box-shadow:0 0 0 2px var(--surface-2);
+}
+.theme-preview{
+  border-radius:9px;padding:8px;margin-bottom:10px;
+  display:flex;flex-direction:column;gap:4px;min-height:78px;
+}
+.theme-hero{height:22px;border-radius:5px;margin-bottom:2px}
+.theme-bar{height:9px;border-radius:3px;opacity:.95}
+.theme-bar.short{width:70%}
+.theme-line{height:5px;border-radius:2px;opacity:.55;width:88%}
+.theme-name{font-size:13px;font-weight:720;color:var(--text);margin-bottom:2px}
+.theme-desc{font-size:10.5px;color:var(--text-3);line-height:1.4}
+@media (max-width:520px){
+  .theme-grid{grid-template-columns:1fr}
+  .theme-preview{min-height:64px}
+}
 </style>
 </head>
 <body>
@@ -823,6 +853,27 @@ async function pageMail() {
       ${field('收件邮箱', `<input class="input" id="f-mail-to" type="email" value="${esc(m.to || '')}" placeholder="留空则发给自己">`, '可多个，逗号分隔')}
       ${field('发件人显示名 / 地址', `<input class="input" id="f-mail-from" value="${esc(m.from || '')}" placeholder="留空使用发件邮箱">`)}
     </div></div>`, 'mail') +
+    section('邮件主题', `<div class="card"><div class="card-bd">
+      <div class="li-meta" style="margin-bottom:14px">选择每日邮件的视觉风格，保存后下一封邮件生效。</div>
+      <div class="theme-grid" id="themeGrid">
+        ${[
+          { k: 'minimal', n: '极简白', d: '渐变紫 + 纯白卡片', bg: '#F5F7FC', card: '#FFFFFF', ink: '#0F172A', g: 'linear-gradient(135deg,#6366F1,#8B5CF6,#A855F7)' },
+          { k: 'dark', n: '墨黑', d: '深灰底 + 暖白字', bg: '#0B0F1A', card: '#151C2C', ink: '#F1F5F9', g: 'linear-gradient(135deg,#818CF8,#A78BFA,#C084FC)' },
+          { k: 'paper', n: '报刊', d: '米色底 + 衬线体', bg: '#FAF7F0', card: '#FFFDF8', ink: '#2B2118', g: 'linear-gradient(135deg,#8B4513,#A0522D,#B8860B)' },
+        ].map((t) => `
+          <button class="theme-card ${(m.theme || 'minimal') === t.k ? 'active' : ''}" data-theme="${t.k}">
+            <div class="theme-preview" style="background:${t.bg}">
+              <div class="theme-hero" style="background:${t.g}"></div>
+              <div class="theme-bar" style="background:${t.card}"></div>
+              <div class="theme-bar short" style="background:${t.card}"></div>
+              <div class="theme-line" style="background:${t.card}"></div>
+            </div>
+            <div class="theme-name">${t.n}</div>
+            <div class="theme-desc">${t.d}</div>
+          </button>`).join('')}
+      </div>
+      <input type="hidden" id="f-mail-theme" value="${esc(m.theme || 'minimal')}">
+    </div></div>`, 'image') +
     section('SMTP 高级（仅自定义）', `<div class="card"><div class="card-bd ${isCustom ? '' : 'hidden'}" id="smtpBox">
       <div class="form-row">
         ${field('SMTP 服务器', `<input class="input mono" id="f-mail-smtpHost" value="${esc(m.smtpHost || '')}" placeholder="smtp.example.com">`)}
@@ -856,6 +907,7 @@ function collectMail() {
     smtpHost: g('f-mail-smtpHost'),
     smtpPort: parseInt($('#f-mail-smtpPort')?.value || '0', 10) || 0,
     smtpSecure: !!$('#f-mail-smtpSecure')?.checked,
+    theme: $('#f-mail-theme')?.value || 'minimal',
   };
   const pass = g('f-mail-pass');
   if (pass) out.pass = pass;
@@ -1781,6 +1833,17 @@ function bind() {
     const addSrc = e.target.closest('[data-add-src]');
     if (addSrc && !addSrc.disabled) {
       return addOneSource(addSrc.dataset.addSrc, addSrc.dataset.name, addSrc.dataset.cat);
+    }
+
+    /* 邮件主题卡片 */
+    const themeCard = e.target.closest('[data-theme]');
+    if (themeCard) {
+      const key = themeCard.dataset.theme;
+      $$('.theme-card').forEach((c) => c.classList.toggle('active', c === themeCard));
+      const hidden = $('#f-mail-theme');
+      if (hidden) hidden.value = key;
+      buzz();
+      return;
     }
 
     /* 模型 chip */
