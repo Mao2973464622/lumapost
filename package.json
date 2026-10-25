@@ -1,6 +1,6 @@
 {
   "name": "lumapost",
-  "version": "10.3.0",
+  "version": "10.4.0",
   "description": "LumaPost 光影邮报 — AI 驱动的智能新闻邮件系统。175 个信息源 · 13 个中文热榜 · 10 套邮件主题 · 本地 Web UI 管理后台。",
   "main": "scripts/fetch-news-ai.js",
   "scripts": {
@@ -28,10 +28,10 @@
     "mail:list": "node scripts/mail-provider.js --list",
     "mail:test": "node scripts/mail-provider.js --test",
     "scheduler": "node -e \"require('./scripts/scheduler').start()\"",
-    "send:afternoon": "node scripts/mail-provider.js --send --subject=\"✨ LumaPost · 光影邮报 · 午后速递\" --body-file=data/afternoon-email.html",
-    "send:evening": "node scripts/mail-provider.js --send --subject=\"✨ LumaPost · 光影邮报 · 晚间总结\" --body-file=data/evening-email.html",
-    "send:morning": "node scripts/mail-provider.js --send --subject=\"✨ LumaPost · 光影邮报 · 早报\" --body-file=data/morning-email.html",
-    "send:noon": "node scripts/mail-provider.js --send --subject=\"✨ LumaPost · 光影邮报 · 午报\" --body-file=data/noon-email.html",
+    "send:afternoon": "node scripts/send-mail.js --period=afternoon",
+    "send:evening": "node scripts/send-mail.js --period=evening",
+    "send:morning": "node scripts/send-mail.js --period=morning",
+    "send:noon": "node scripts/send-mail.js --period=noon",
     "start": "node scripts/web-server.js",
     "web": "node scripts/web-server.js",
     "sources:list": "node -e \"const c=require('./scripts/sources-catalog');console.log(c.CATALOG.length+' 个源 / '+Object.keys(c.CATEGORIES).length+' 分类')\"",
