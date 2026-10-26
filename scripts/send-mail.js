@@ -65,16 +65,11 @@ function ok(msg) {
   const cfg = store.getAll();
   const subjectPrefix = cfg.mail.subjectPrefix || 'LumaPost 光影邮报';
 
-  // 1. 数据文件
+  // 1. 数据文件（严格匹配本时段；不回落 all-latest，避免用过期数据发送）
   let dataFile = path.join(DATA_DIR, period + '-latest.json');
   if (!fs.existsSync(dataFile)) {
-    const fallback = path.join(DATA_DIR, 'all-latest.json');
-    if (fs.existsSync(fallback)) {
-      dataFile = fallback;
-      console.log('ℹ️ 未找到 ' + period + ' 数据，改用 all-latest.json');
-    } else {
-      fail('该时段暂无数据（' + period + '-latest.json 不存在），请先抓取');
-    }
+    fail('该时段暂无数据（' + period + '-latest.json 不存在）。'
+      + ' 为避免发送过期内容，本脚本不回退到 all-latest.json，请先抓取。');
   }
 
   const htmlFile = path.join(DATA_DIR, period + '-email.html');
