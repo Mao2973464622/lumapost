@@ -1,0 +1,33 @@
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+#  .dockerignore (v10.5.0 新增)
+#  旧版没有这个文件，导致 node_modules / data / config（含明文密钥）
+#  以及 .git（1.8MB 历史，含旧提交里的授权码）全被塞进构建上下文。
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+node_modules
+npm-debug.log*
+
+# 运行时数据与配置（必须用 volume 挂载，绝不入镜像）
+data
+config
+server.log
+*.log
+
+# 版本控制与工具
+.git
+.gitignore
+.github
+
+# 文档与本地环境
+README.md
+*.md
+.env
+.env.*
+.vscode
+.idea
+.DS_Store
+
+# 临时与测试
+tests
+tmp-*
+*.tmp
+coverage

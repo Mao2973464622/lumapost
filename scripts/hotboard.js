@@ -354,8 +354,13 @@ async function fetchAll(opts) {
   const jobs = [];
   const names = [];
 
-  jobs.push(fetchAllHotboards(opts.hotTypes, { limit: opts.limit || 10, concurrency: 6 }));
-  names.push('hotboards');
+  // v10.5.0：hotTypes 传空数组 = 显式跳过热榜（供 fetch-news-ai 去重用）；
+  //           传 undefined/null = 抓全部平台（旧行为）
+  const skipHotboards = Array.isArray(opts.hotTypes) && opts.hotTypes.length === 0;
+  if (!skipHotboards) {
+    jobs.push(fetchAllHotboards(opts.hotTypes, { limit: opts.limit || 10, concurrency: 6 }));
+    names.push('hotboards');
+  }
 
   if (opts.steam !== false) { jobs.push(fetchSteam({ limit: opts.limit || 8 })); names.push('steam'); }
   if (opts.epic !== false) { jobs.push(fetchEpicFree({ limit: opts.limit || 10 })); names.push('epic'); }
@@ -373,7 +378,7 @@ async function fetchAll(opts) {
       r.items.forEach((it) => all.push(it));
     }
   };
-  (out.hotboards || []).forEach(push);
+  (out.hotboards || []).forEach(push);   // hotTypes=[] 时 out.hotboards 为 undefined，此处已兜底
   push(out.steam);
   push(out.epic);
   push(out.trending);

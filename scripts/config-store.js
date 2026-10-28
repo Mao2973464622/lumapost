@@ -17,7 +17,11 @@ const CONFIG_DIR = path.join(ROOT, 'config');
 const CONFIG_FILE = path.join(CONFIG_DIR, 'app.json');
 
 const DEFAULT_CONFIG = {
-  version: '10.4.1',
+  version: (function () {
+    // v10.5.0：版本号单一来源 = package.json（旧版在 6 处各写各的：
+    // package 10.4.1 / 注释 v4.0 / meta.version '3.0' / 横幅 v10.4.0 / Docker v4.1 / README v2.0）
+    try { return require('../package.json').version; } catch (e) { return '0.0.0'; }
+  })(),
 
   ai: {
     provider: 'deepseek',
@@ -58,6 +62,7 @@ const DEFAULT_CONFIG = {
     language: 'zh-CN',
     theme: 'auto',
     autoSchedule: false,
+    // v10.6.0：Web UI 已移除，不再需要 adminToken / allowLan / corsAllowOrigin / secretKey
   },
 
   sections: {
@@ -79,6 +84,29 @@ const DEFAULT_CONFIG = {
     engine: 'bing',      // bing | google | baidu | ddg
     aiSearch: true,      // 是否同时用大模型搜索
     useForNews: false,   // 抓取时是否把搜索结果并入
+  },
+
+  // v10.5.0：邮件内容预算（防止超出 Gmail 102KB 截断线）
+  email: {
+    itemsTotal: 40,
+    itemsPerSection: 5,
+    headlineCount: 3,
+    trendCount: 5,
+    titleChars: 120,
+    summaryChars: 150,
+    commentaryChars: 640,
+    quicknoteChars: 120,
+    maxHtmlKB: 92,
+    showHeadlines: true,
+    showCommentary: true,
+    showStocks: true,
+    showTrends: true,
+    showCharts: true,
+    showToc: true,
+    showQuote: true,
+    subjectPrefix: '✨ LumaPost · 光影邮报',
+    plainTextAlternative: true,
+    listUnsubscribe: true,
   },
 
   // 增强数据源（融合自 daily-news）
@@ -108,15 +136,68 @@ const DEFAULT_CONFIG = {
     evening: { fetch: true, send: true },
   },
 
-  history: { fetchHistory: [], sendHistory: [] },
+  history: { fetchHistory: [], sendHistory: [] },   // 兼容旧字段；v10.5 起实际写入 data/history.json
   updatedAt: new Date().toISOString(),
 };
 
 let _cache = null;
 let _mtime = 0;
+let _histCache = null;
 
 function ensureDir() {
   if (!fs.existsSync(CONFIG_DIR)) fs.mkdirSync(CONFIG_DIR, { recursive: true });
+}
+
+/* ---- v10.5.0：运行时历史与配置分离（配置不再被运行噪声反复重写） ---- */
+const DATA_DIR = path.join(ROOT, 'data');
+const HISTORY_FILE = path.join(DATA_DIR, 'history.json');
+
+function readHistoryFile() {
+  try {
+    if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
+    if (fs.existsSync(HISTORY_FILE)) {
+      const j = JSON.parse(fs.readFileSync(HISTORY_FILE, 'utf8'));
+      if (j && typeof j === 'object') {
+        return {
+          fetchHistory: Array.isArray(j.fetchHistory) ? j.fetchHistory : [],
+          sendHistory: Array.isArray(j.sendHistory) ? j.sendHistory : [],
+        };
+      }
+    }
+  } catch (e) { /* 损坏则重置 */ }
+  // 首次：从旧 app.json 迁移，避免历史记录丢失
+  try {
+    if (fs.existsSync(CONFIG_FILE)) {
+      const legacy = JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf8'));
+      if (legacy && legacy.history) {
+        return {
+          fetchHistory: Array.isArray(legacy.history.fetchHistory) ? legacy.history.fetchHistory : [],
+          sendHistory: Array.isArray(legacy.history.sendHistory) ? legacy.history.sendHistory : [],
+        };
+      }
+    }
+  } catch (e) { /* ignore */ }
+  return { fetchHistory: [], sendHistory: [] };
+}
+
+function getHistory() {
+  if (_histCache) return _histCache;
+  _histCache = readHistoryFile();
+  return _histCache;
+}
+
+function writeHistory(h) {
+  try {
+    if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
+    const tmp = HISTORY_FILE + '.' + process.pid + '.tmp';
+    fs.writeFileSync(tmp, JSON.stringify(h, null, 2), 'utf8');
+    fs.renameSync(tmp, HISTORY_FILE);
+    _histCache = h;
+    return true;
+  } catch (e) {
+    console.error('[history] 写入失败:', e.message);
+    return false;
+  }
 }
 
 function deepMerge(target, source) {
@@ -145,6 +226,11 @@ function readConfig() {
       _mtime = st.mtimeMs;
       const parsed = JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf8'));
       _cache = deepMerge(clone(DEFAULT_CONFIG), parsed);
+      // v10.5.0：app.json 里残留的旧版本号一律以 package.json 为准（自动收敛，无需手动改）
+      if (_cache.version !== DEFAULT_CONFIG.version) {
+        _cache.version = DEFAULT_CONFIG.version;
+        _save(_cache);
+      }
       return _cache;
     }
   } catch (e) {
@@ -158,7 +244,8 @@ function readConfig() {
 function _save(config) {
   ensureDir();
   config.updatedAt = new Date().toISOString();
-  const tmp = CONFIG_FILE + '.tmp';
+  // v10.5.0：临时文件名带 pid，避免多进程（Web + 抓取子进程）互相覆盖
+  const tmp = CONFIG_FILE + '.' + process.pid + '.tmp';
   try {
     fs.writeFileSync(tmp, JSON.stringify(config, null, 2), 'utf8');
     fs.renameSync(tmp, CONFIG_FILE);
@@ -210,6 +297,68 @@ function updatePaths(pathMap) {
 function getAll() { return readConfig(); }
 function reset() { _cache = null; _mtime = 0; return _save(clone(DEFAULT_CONFIG)); }
 
+function addHistory(type, record) {
+  // v10.5.0：历史改写 data/history.json，不再污染 config/app.json
+  const h = getHistory();
+  if (!Array.isArray(h[type])) h[type] = [];
+  h[type].unshift(Object.assign({}, record, { time: new Date().toISOString() }));
+  if (h[type].length > 50) h[type] = h[type].slice(0, 50);
+  return writeHistory(h);
+}
+
+function clearHistory() {
+  return writeHistory({ fetchHistory: [], sendHistory: [] });
+}
+
+/**
+ * v10.5.0：配置脱敏。任何出网（API 响应 / 日志 / 导出）前必须过一遍，
+ * 敏感字段只保留「是否已设置」与掩码，绝不回传明文。
+ */
+const SECRET_PATHS = ['ai.apiKey', 'mail.pass'];   // v10.6.0：WebUI 已移除，仅这两个仍是机密
+
+function maskValue(v) {
+  const s = String(v || '');
+  if (!s) return '';
+  if (s.length <= 8) return '••••••••';
+  return s.slice(0, 3) + '••••••••' + s.slice(-2);
+}
+
+function sanitizeForOutput(config) {
+  const out = JSON.parse(JSON.stringify(config || {}));
+  for (const p of SECRET_PATHS) {
+    const keys = p.split('.');
+    let obj = out;
+    for (let i = 0; i < keys.length - 1 && obj; i++) obj = obj[keys[i]];
+    if (!obj) continue;
+    const last = keys[keys.length - 1];
+    const val = obj[last];
+    if (val) {
+      obj[last] = '';
+      obj[last + 'Set'] = true;
+      obj[last + 'Mask'] = maskValue(val);
+    } else {
+      obj[last + 'Set'] = false;
+    }
+  }
+  return out;
+}
+
+/**
+ * v10.5.0：运行时可观测状态（调度器 / 最近错误 / 锁），
+ * 供 UI 显示真实结果，不再只靠 config 里的历史字段。
+ */
+function runtimeStatus() {
+  const st = { historyCounts: {}, historyFile: HISTORY_FILE, historyExists: fs.existsSync(HISTORY_FILE) };
+  try {
+    const h = getHistory();
+    st.historyCounts.fetch = h.fetchHistory.length;
+    st.historyCounts.send = h.sendHistory.length;
+    st.lastFetch = h.fetchHistory[0] || null;
+    st.lastSend = h.sendHistory[0] || null;
+  } catch (e) { st.historyError = e.message; }
+  return st;
+}
+
 function validate() {
   const c = readConfig();
   const errors = [];
@@ -234,27 +383,29 @@ function validate() {
   const port = Number(c.app.port);
   if (!Number.isInteger(port) || port < 1 || port > 65535) errors.push('端口号无效');
 
+  // v10.6.0：Web UI 已移除，不再校验 adminToken / host 暴露
+  if (!(c.sections && Array.isArray(c.sections.enabled) && c.sections.enabled.length)) {
+    warnings.push('未启用任何版块');
+  }
+  const rss = (c.sources && Array.isArray(c.sources.rss)) ? c.sources.rss : [];
+  const enabledRss = rss.filter(s => s && s.enabled !== false).length;
+  if (c.sources && c.sources.enableRss !== false && enabledRss === 0) {
+    warnings.push('RSS 已开启但没有启用的源，抓取将回落到内置热榜/网页源');
+  }
+  if (Number(c.ai.maxTokens) > 8000) {
+    warnings.push('AI maxTokens=' + c.ai.maxTokens + ' 偏高，小上下文模型可能直接报错并触发降级');
+  }
+
   return { valid: errors.length === 0, errors: errors, warnings: warnings };
-}
-
-function addHistory(type, record) {
-  const config = readConfig();
-  if (!config.history[type]) config.history[type] = [];
-  config.history[type].unshift(Object.assign({}, record, { time: new Date().toISOString() }));
-  if (config.history[type].length > 50) config.history[type] = config.history[type].slice(0, 50);
-  return _save(config);
-}
-
-function clearHistory() {
-  const config = readConfig();
-  config.history = { fetchHistory: [], sendHistory: [] };
-  return _save(config);
 }
 
 module.exports = {
   get: get, set: set, update: update, updatePaths: updatePaths,
   getAll: getAll, reset: reset, validate: validate,
   addHistory: addHistory, clearHistory: clearHistory,
+  getHistory: getHistory, runtimeStatus: runtimeStatus,
+  sanitizeForOutput: sanitizeForOutput, maskValue: maskValue, SECRET_PATHS: SECRET_PATHS,
   saveConfig: saveConfig, readConfig: readConfig,
+  HISTORY_FILE: HISTORY_FILE,
   DEFAULT_CONFIG: DEFAULT_CONFIG, CONFIG_FILE: CONFIG_FILE, CONFIG_DIR: CONFIG_DIR, ROOT: ROOT,
 };

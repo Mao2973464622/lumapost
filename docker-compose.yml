@@ -1,24 +1,30 @@
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-#  Docker Compose for LumaPost v4.1
-#  部署: docker compose up -d
-#  测试: docker compose run --rm lumapost all:morning
+#  Docker Compose for LumaPost (v10.6.0)
+#  Web UI 已移除：本容器只跑常驻调度器，不暴露任何端口。
+#
+#  启动:      docker compose up -d
+#  看状态:    docker compose exec lumapost node scripts/cli.js status
+#  立刻发一份: docker compose run --rm lumapost run morning
+#  看日志:    docker compose logs -f
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 services:
   lumapost:
     build: .
+    image: lumapost:latest
+    container_name: lumapost
     restart: unless-stopped
+    environment:
+      TZ: Asia/Shanghai
     env_file:
-      - .env
+      - path: .env
+        required: false
     volumes:
+      - ./config:/app/config
       - ./data:/app/data
-      - ./logs:/app/logs
-    # 每天 4 次定时执行（使用 ofelia cron 容器）
-    # 或单独运行: docker compose run --rm lumapost all:evening
-  # 定时器（替代 cron）
-  cron:
-    image: mcuadros/ofelia:latest
-    depends_on:
-      - lumapost
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock:ro
-      - ./ofelia.ini:/etc/ofelia/config.ini:ro
+    command: ["serve"]
+    healthcheck:
+      test: ["CMD", "node", "-e", "const c=require('./scripts/config-store');process.exit(c.validate().valid?0:1)"]
+      interval: 120s
+      timeout: 10s
+      retries: 3
+      start_period: 30s

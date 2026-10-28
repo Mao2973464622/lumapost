@@ -267,9 +267,14 @@ function loadConfig() {
   const store = getStore();
   const fileCfg = store ? store.getAll() : {};
   const mailCfg = fileCfg.mail || {};
+  const def = (store && store.DEFAULT_CONFIG && store.DEFAULT_CONFIG.mail) || {};
+  // v10.5.0：与 ai-provider 共用同一优先级规则。
+  // 旧逻辑「配置文件永远优先」会让 GitHub Actions 里的 MAIL_PROVIDER 失效
+  // （本地默认的 'qq' 会压过 CI 设的 resend/sendgrid）。
+  const pick = require('./config-pref').pickFrom;
 
   const providerKey = String(
-    process.env.MAIL_PROVIDER || mailCfg.provider || 'qq'
+    pick('provider', mailCfg, def.provider, ['MAIL_PROVIDER']) || 'qq'
   ).toLowerCase();
   const provider = PROVIDERS[providerKey];
 
@@ -279,19 +284,19 @@ function loadConfig() {
     );
   }
 
-  let user = mailCfg.user
-    || process.env.MAIL_USER
-    || process.env.EMAIL_FROM
+  let user = (mailCfg.user && String(mailCfg.user).trim())
+    || (process.env.MAIL_USER && String(process.env.MAIL_USER).trim())
+    || (process.env.EMAIL_FROM && String(process.env.EMAIL_FROM).trim())
     || (provider.envUser ? process.env[provider.envUser] : null);
 
-  const pass = mailCfg.pass
-    || process.env.MAIL_PASS
-    || process.env.MAIL_API_KEY
-    || process.env.EMAIL_PASS
+  const pass = (mailCfg.pass && String(mailCfg.pass).trim())
+    || (process.env.MAIL_PASS && String(process.env.MAIL_PASS).trim())
+    || (process.env.MAIL_API_KEY && String(process.env.MAIL_API_KEY).trim())
+    || (process.env.EMAIL_PASS && String(process.env.EMAIL_PASS).trim())
     || (provider.envPass ? process.env[provider.envPass] : null);
 
   if (providerKey === 'mailjet') {
-    user = mailCfg.user || process.env.MAILJET_USER || process.env.MAIL_USER || process.env.MAIL_API_KEY;
+    user = user || process.env.MAILJET_USER || process.env.MAIL_USER || process.env.MAIL_API_KEY;
   }
 
   if (!pass) {
@@ -304,6 +309,7 @@ function loadConfig() {
     throw new Error('未配置发件邮箱。请在 Web UI 配置页填写。');
   }
 
+  const emailCfg = (fileCfg.email || {});
   const config = {
     provider: providerKey,
     providerName: provider.name,
@@ -312,6 +318,9 @@ function loadConfig() {
     pass: pass,
     from: mailCfg.from || process.env.MAIL_FROM || user || 'noreply@example.com',
     to: mailCfg.to || process.env.MAIL_TO || user,
+    // v10.5.0：主题前缀与退订链接可配置
+    subjectPrefix: emailCfg.subjectPrefix || process.env.MAIL_SUBJECT_PREFIX || '✨ LumaPost · 光影邮报',
+    unsubscribeUrl: process.env.MAIL_UNSUBSCRIBE_URL || mailCfg.unsubscribeUrl || '',
   };
 
   if (provider.type === 'smtp') {
@@ -397,6 +406,9 @@ async function sendViaSMTP(cfg, mail) {
     port: cfg.port,
     secure: cfg.secure,
     auth: { user: cfg.user, pass: cfg.pass },
+    connectionTimeout: 20000,
+    greetingTimeout: 20000,
+    socketTimeout: 60000,
   };
   if (cfg.requireTLS) transportOpts.requireTLS = true;
 
@@ -404,16 +416,32 @@ async function sendViaSMTP(cfg, mail) {
   const transporter = nodemailer.createTransport(transportOpts);
   await transporter.verify();
 
-  const info = await transporter.sendMail({
+  const opts = {
     from: `"${mail.fromName || 'LumaPost 光影邮报'}" <${cfg.from}>`,
     to: mail.to,
     subject: mail.subject,
     html: mail.html,
-    text: mail.text,
-  });
+  };
+  // v10.5.0：multipart/alternative —— 提供纯文本备选体（可访问性 + 送达率）
+  if (mail.text) opts.text = mail.text;
+  // v10.5.0：List-Unsubscribe（Gmail/Yahoo 群发投递要求）
+  const unsub = buildUnsubHeaders(cfg, mail);
+  if (unsub) opts.headers = unsub;
+
+  const info = await transporter.sendMail(opts);
 
   console.log(`✅ 邮件已发送，Message ID: ${info.messageId}`);
-  return { provider: cfg.provider, type: 'smtp', messageId: info.messageId, to: mail.to };
+  return { provider: cfg.provider, type: 'smtp', messageId: info.messageId, to: mail.to, accepted: (info.accepted || []).length };
+}
+
+/** List-Unsubscribe / List-Unsubscribe-Post（需要配置 MAIL_UNSUBSCRIBE_URL） */
+function buildUnsubHeaders(cfg, mail) {
+  const url = String(cfg.unsubscribeUrl || mail.unsubscribeUrl || '').trim();
+  if (!url) return null;
+  const h = {};
+  h['List-Unsubscribe'] = '<' + url + '>';
+  h['List-Unsubscribe-Post'] = 'List-Unsubscribe=One-Click';
+  return h;
 }
 
 // ─────────────────────────────────────────────
@@ -550,54 +578,19 @@ async function sendViaMailjet(cfg, mail) {
   return { provider: cfg.provider, type: 'api', to: mail.to };
 }
 
-// ─────────────────────────────────────────────
-//  阿里云邮件推送 API (简化版，实际需要签名)
-// ─────────────────────────────────────────────
+/**
+ * v10.5.0 说明：阿里云 DirectMail / 腾讯云 SES 的 API 都需要请求签名
+ * （HMAC-SHA1 / TC3-HMAC-SHA256），本文件未实现签名，直连必然返回 404/401。
+ * 与其静默失败，不如明确抛错，引导用户改用 SMTP 通道（两者都提供 SMTP）。
+ */
 async function sendViaAliyunDM(cfg, mail) {
-  const region = process.env.ALIYUN_DM_REGION || 'cn-hangzhou';
-  const action = 'SingleSendMail';
-  const params = {
-    Action: action,
-   AccountName: process.env.ALIYUN_DM_ACCOUNT || cfg.from,
-    ReplyToAddress: 'false',
-    AddressType: '1',
-    ToAddress: mail.to.split(',').map(s => s.trim()).join(','),
-    FromAlias: 'LumaPost',
-    Subject: mail.subject,
-    HtmlBody: mail.html,
-    RegionId: region,
-    Version: '2015-11-23',
-  };
-  // 简化版：实际需要 HMAC-SHA1 签名
-  const url = `https://dm.${region}.aliyuncs.com/?${new URLSearchParams(params).toString()}`;
-  const res = await httpJSON(url, 'POST', { 'Content-Type': 'application/x-www-form-urlencoded' }, null, 30000);
-  return { provider: cfg.provider, type: 'api', to: mail.to };
+  throw new Error('aliyun-dm 的 HTTP API 未实现签名，无法直连。'
+    + ' 请改用 SMTP：MAIL_PROVIDER=custom-smtp + MAIL_SMTP_HOST=smtpdm.aliyun.com + MAIL_SMTP_PORT=465/80');
 }
 
-// ─────────────────────────────────────────────
-//  腾讯云 SES API (简化版，实际需要 TC3-HMAC-SHA256 签名)
-// ─────────────────────────────────────────────
 async function sendViaQcloudSES(cfg, mail) {
-  const region = process.env.QCLOUD_SES_REGION || 'ap-guangzhou';
-  const params = {
-    FromEmailAddress: cfg.from,
-    ToAddresses: mail.to.split(',').map(s => s.trim()),
-    Subject: mail.subject,
-    HtmlBody: mail.html,
-  };
-  const res = await httpJSON(
-    cfg.apiUrl,
-    'POST',
-    {
-      'Content-Type': 'application/json; charset=utf-8',
-      'X-TC-Action': 'SendEmail',
-      'X-TC-Version': '2020-10-02',
-      'X-TC-Region': region,
-    },
-    params,
-    30000
-  );
-  return { provider: cfg.provider, type: 'api', to: mail.to };
+  throw new Error('qcloud-ses 的 HTTP API 未实现 TC3-HMAC-SHA256 签名，无法直连。'
+    + ' 请改用 SMTP：MAIL_PROVIDER=custom-smtp + MAIL_SMTP_HOST=smtp.sg.mail.qq.com');
 }
 
 // ─────────────────────────────────────────────
@@ -613,11 +606,37 @@ async function send(mail) {
     mail.to = cfg.to;
   }
 
-  console.log(`📧 准备发送邮件`);
-  console.log(`   服务商: ${cfg.providerName} (${cfg.type})`);
-  console.log(`   发件人: ${cfg.from}`);
-  console.log(`   收件人: ${mail.to}`);
-  console.log(`   主题: ${mail.subject}`);
+  // v10.5.0：体积守门。Gmail 在 102KB 截断、多数邮箱单封有 20~50MB 上限；
+  //          这里在发送前拦截，避免"发出去了但收件人被截断"这种最难排查的故障。
+  const htmlKB = Buffer.byteLength(mail.html, 'utf8') / 1024;
+  const HARD_LIMIT_KB = 95;
+  if (htmlKB > HARD_LIMIT_KB) {
+    const msg = `邮件 HTML 达 ${htmlKB.toFixed(1)} KB，超过 ${HARD_LIMIT_KB} KB 安全线（Gmail 102KB 截断），已阻止发送`;
+    console.error('❌ ' + msg + '。请在 设置→邮件内容 降低 itemsTotal / 关闭图表与目录。');
+    throw new Error(msg);
+  }
+
+  // v10.5.0：未显式提供 text 时，从 HTML 兜底生成纯文本
+  if (!mail.text) {
+    try {
+      const g = require('./gen-html');
+      if (typeof g.generateText === 'function' && mail.data) mail.text = g.generateText(mail.data);
+    } catch (e) { /* 可选能力 */ }
+  }
+  if (!mail.text) {
+    mail.text = String(mail.html)
+      .replace(/<style[\s\S]*?<\/style>/gi, '').replace(/<script[\s\S]*?<\/script>/gi, '')
+      .replace(/<[^>]+>/g, ' ').replace(/&amp;/g, '&').replace(/&nbsp;/g, ' ')
+      .replace(/\s+/g, ' ').trim().slice(0, 4000);
+  }
+
+  const safeTo = String(mail.to || '').replace(/[^@,\.\-\w]/g, '');
+  console.log('📧 准备发送邮件');
+  console.log('   服务商: ' + cfg.providerName + ' (' + cfg.type + ')');
+  console.log('   发件人: ' + cfg.from);
+  console.log('   收件人: ' + safeTo);
+  console.log('   主题: ' + mail.subject);
+  console.log('   体积: ' + htmlKB.toFixed(1) + ' KB');
 
   switch (cfg.type) {
     case 'smtp': return sendViaSMTP(cfg, mail);

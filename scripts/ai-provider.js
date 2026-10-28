@@ -308,9 +308,11 @@ function loadConfig() {
   const store = getStore();
   const fileCfg = store ? store.getAll() : {};
   const aiCfg = fileCfg.ai || {};
+  const def = (store && store.DEFAULT_CONFIG && store.DEFAULT_CONFIG.ai) || {};
+  const pick = require('./config-pref').pickFrom;   // v10.5.0：与 mail-provider 共用同一优先级规则
 
   const providerKey = String(
-    process.env.AI_PROVIDER || aiCfg.provider || 'deepseek'
+    pick('provider', aiCfg, def.provider, ['AI_PROVIDER']) || 'deepseek'
   ).toLowerCase();
   const provider = PROVIDERS[providerKey];
 
@@ -320,11 +322,15 @@ function loadConfig() {
     );
   }
 
-  const apiKey = process.env.AI_API_KEY
-    || aiCfg.apiKey
-    || process.env[provider.envKey]
-    || process.env[providerKey.toUpperCase() + '_API_KEY']
-    || '';
+  // v10.5.0：显式设为空串会触发 pickFrom 的「空值取默认」逻辑，导致真实 key 被丢弃；
+  //          API Key 属于「有就用、没有就报缺失」的字段，因此单独按 文件 > env 顺序取。
+  const apiKey = String(
+    (aiCfg.apiKey && String(aiCfg.apiKey).trim())
+    || (process.env.AI_API_KEY && String(process.env.AI_API_KEY).trim())
+    || (provider.envKey && process.env[provider.envKey] && String(process.env[provider.envKey]).trim())
+    || (process.env[providerKey.toUpperCase() + '_API_KEY'] && String(process.env[providerKey.toUpperCase() + '_API_KEY']).trim())
+    || ''
+  );
 
   if (!apiKey && providerKey !== 'custom') {
     throw new Error(
@@ -332,8 +338,9 @@ function loadConfig() {
     );
   }
 
-  const baseUrlRaw = process.env.AI_BASE_URL
-    || aiCfg.baseUrl
+  const baseUrlRaw = (aiCfg.baseUrl && String(aiCfg.baseUrl).trim())
+    || (process.env.AI_BASE_URL && String(process.env.AI_BASE_URL).trim())
+    || pick('baseUrl', aiCfg, def.baseUrl, ['AI_BASE_URL'])
     || provider.baseUrl
     || '';
 
@@ -341,18 +348,19 @@ function loadConfig() {
     throw new Error('提供商 "' + providerKey + '" 缺少 Base URL，请在配置页填写。');
   }
 
+  const maxTokens = pick('maxTokens', aiCfg, def.maxTokens, ['AI_MAX_TOKENS'], { number: true });
+  const temperature = pick('temperature', aiCfg, def.temperature, ['AI_TEMP'], { number: true });
+
   // config-store 是单一数据源，每次调用重新读取（其内部有 mtime 缓存，开销极小）
   return {
     provider: providerKey,
     providerName: provider.name,
     apiKey: apiKey,
     baseUrl: String(baseUrlRaw).replace(/\/+$/, ''),
-    model: process.env.AI_MODEL || aiCfg.model || provider.defaultModel,
-    timeout: Number(process.env.AI_TIMEOUT) || Number(aiCfg.timeout) || 60000,
-    maxTokens: Number(process.env.AI_MAX_TOKENS) || Number(aiCfg.maxTokens) || 4096,
-    temperature: process.env.AI_TEMP !== undefined
-      ? parseFloat(process.env.AI_TEMP)
-      : (aiCfg.temperature !== undefined ? Number(aiCfg.temperature) : 0.7),
+    model: pick('model', aiCfg, def.model || '', ['AI_MODEL']) || provider.defaultModel,
+    timeout: pick('timeout', aiCfg, def.timeout, ['AI_TIMEOUT'], { number: true }) || 60000,
+    maxTokens: maxTokens,
+    temperature: temperature,
     protocol: provider.protocol,
   };
 }
@@ -455,20 +463,77 @@ async function chat(messages, options = {}) {
       break;
     }
   }
-  
-  try {
-    const res = await httpRequest(url, { method: 'POST', headers, timeout }, body);
-    
-    switch (cfg.protocol) {
-      case 'anthropic':
-        return res.content?.[0]?.text || '';
-      case 'gemini':
-        return res.candidates?.[0]?.content?.parts?.[0]?.text || '';
-      default:
-        return res.choices?.[0]?.message?.content || '';
+  // 发起请求（含空响应重试，见下方 callWithRetry）
+  return callWithRetry();
+
+  /**
+   * v10.5.0：空响应重试 —— 这是"AI 解读长期消失"的最终根因。
+   *
+   * 实测：同一个 prompt、同一组参数，网关有时返回 6905 字完整 JSON，
+   * 有时返回 choice.message.content = ""（finish_reason 仍是 stop，
+   * usage 里 reasoning_tokens 有值）。即上游模型偶发"只想不说"。
+   * 旧代码把这个空串原样返回 → safeJSON 解析失败 → 整组降级，
+   * 而且日志只写"格式错误"，完全看不出是"模型返回空"。
+   *
+   * 处理：空响应/极短响应视为失败，换一点温度重问；仍失败则抛错，
+   *       让上层带着可诊断信息决定降级。
+   */
+  async function callWithRetry() {
+    const maxAttempts = Math.max(1, Math.min(4, Number(options.retries) || 3));
+    let lastDiag = '';
+    let sentMaxTokens = Number(body.max_tokens) || 4096;
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      let res;
+      try {
+        res = await httpRequest(url, { method: 'POST', headers, timeout }, body);
+      } catch (err) {
+        throw new Error(`[${cfg.providerName}/${model}] 调用失败: ${err.message}`);
+      }
+
+      const usage = res.usage || {};
+      const reasoning = (usage.completion_tokens_details && usage.completion_tokens_details.reasoning_tokens) || 0;
+      const finish = (res.choices && res.choices[0] && res.choices[0].finish_reason) || '';
+
+      let text = '';
+      switch (cfg.protocol) {
+        case 'anthropic': text = res.content?.[0]?.text || ''; break;
+        case 'gemini': text = res.candidates?.[0]?.content?.parts?.[0]?.text || ''; break;
+        default: text = res.choices?.[0]?.message?.content || ''; break;
+      }
+      text = String(text);
+
+      if (text.trim().length >= 16) return text;
+
+      lastDiag = '空响应(attempt ' + attempt + '/' + maxAttempts + ')'
+        + ' finish=' + (finish || 'n/a')
+        + ' content=' + text.length + '字'
+        + ' sent_max_tokens=' + sentMaxTokens
+        + ' completion_tokens=' + (usage.completion_tokens || 0)
+        + ' reasoning_tokens=' + reasoning;
+
+      // 诊断归类：推理模型把预算烧光 vs 单纯没吐字
+      const reasoningAteAll = reasoning > 0 && (usage.completion_tokens || 0) >= sentMaxTokens * 0.95;
+      if (reasoningAteAll) {
+        console.warn('    · ' + lastDiag + ' ▸ 推理 token 吃光预算，下次翻倍 maxTokens');
+      } else {
+        console.warn('    · ' + lastDiag);
+      }
+
+      if (attempt < maxAttempts) {
+        await new Promise(r => setTimeout(r, 1200 * attempt));
+        if (reasoningAteAll) {
+          // v10.5.0：推理型模型（如 sn-sensenova-6-8-flash-lite）在长 prompt 下
+          // reasoning_tokens 波动极大（实测 222 → 6400+ 全部吃光）。
+          // 固定预算必然偶发空响应，因此按诊断动态翻倍，上限 32000。
+          const next = Math.min(32000, Math.max(4096, Math.round(sentMaxTokens * 2)));
+          body.max_tokens = next;
+          sentMaxTokens = next;
+        } else if (body.temperature !== undefined) {
+          body.temperature = Math.min(1.5, Number(body.temperature || 0.7) + 0.1 * attempt);
+        }
+      }
     }
-  } catch (err) {
-    throw new Error(`[${cfg.providerName}/${model}] 调用失败: ${err.message}`);
+    throw new Error(`[${cfg.providerName}/${model}] 连续 ${maxAttempts} 次返回空内容 · ${lastDiag}`);
   }
 }
 
@@ -484,14 +549,10 @@ async function chatJSON(messages, options = {}) {
     }
   ];
   const text = await chat(enhanced, options);
-  const jsonMatch = text.match(/\{[\s\S]*\}/) || text.match(/\[[\s\S]*\]/);
-  if (jsonMatch) {
-    try { return JSON.parse(jsonMatch[0]); } catch (e) { /* fall through */ }
-  }
-  try { return JSON.parse(text); }
-  catch (e) {
-    throw new Error(`AI 返回非 JSON: ${text.slice(0, 200)}`);
-  }
+  // v10.5.0：走统一的容错解析（未转义引号 / markdown 围栏 / 夹杂说明文字）
+  const parsed = require('./json-repair').parseLoose(text, { verbose: false });
+  if (parsed !== null && parsed !== undefined) return parsed;
+  throw new Error('AI 返回非 JSON: ' + String(text).slice(0, 200));
 }
 
 /**
@@ -520,17 +581,22 @@ async function listModels(providerKey, override) {
   const isCurrent = !providerKey
     || (store && store.get('ai.provider') === key);
 
-  const apiKey = override.apiKey
-    || (isCurrent && store ? store.get('ai.apiKey') : '')
-    || process.env.AI_API_KEY
-    || process.env[provider.envKey]
-    || '';
+  // v10.5.0 修复：只有当目标 provider 就是当前配置的 provider（或用户为本次请求显式传了 key）
+  // 才允许使用配置文件 / 环境变量里的密钥。
+  // 旧逻辑在「UI 里切到别家 provider 但不填 key」时，会把当前 provider 的 key
+  // 带着发往另一个厂商的 baseUrl —— 等于把凭据外发给第三方域名。
+  const apiKey = String(
+    (override.apiKey && String(override.apiKey).trim())
+    || (isCurrent && store && String(store.get('ai.apiKey') || '').trim())
+    || ''
+  ).trim();
 
-  const baseUrl = (override.baseUrl
-    || (isCurrent && store ? store.get('ai.baseUrl') : '')
-    || process.env.AI_BASE_URL
+  const baseUrl = String(
+    (override.baseUrl && String(override.baseUrl).trim())
+    || (isCurrent && store ? String(store.get('ai.baseUrl') || '').trim() : '')
     || provider.baseUrl
-    || '').replace(/\/+$/, '');
+    || ''
+  ).replace(/\/+$/, '');
 
   // 无 Key / 无端点时返回静态内置列表
   if (!apiKey || !baseUrl) {

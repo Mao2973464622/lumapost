@@ -37,7 +37,7 @@ env:
 
 jobs:
   send:
-    name: 📮 LumaPost v4.0
+    name: 📮 LumaPost
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -47,6 +47,10 @@ jobs:
           cache: 'npm'
           cache-dependency-path: package-lock.json
       - run: npm install --no-audit --no-fund
+      - name: ✅ 回归测试（拦截渲染/预算/JSON 回归）
+        run: npm test
+      - name: ✅ 配置体检
+        run: npm run doctor || true
 
       - name: ⏰ 时段（转中国时间）
         id: period
@@ -99,7 +103,8 @@ jobs:
           case "${{ steps.period.outputs.period }}" in
             morning)   T="早报";; noon) T="午报";; afternoon) T="傍晚速递";; evening) T="夜间总结";; *) T="特刊";;
           esac
-          node scripts/mail-provider.js --send --subject="✨ LumaPost · 光影邮报 · $T（v4.0）" --body-file=data/${{ steps.period.outputs.period }}-email.html
+          # v10.6.0：统一走 send-mail.js，复用其数据新鲜度 / 降级拦截 / 体积守门
+          node scripts/send-mail.js --period=${{ steps.period.outputs.period }}
 
       - name: 💾 保存
         if: always()

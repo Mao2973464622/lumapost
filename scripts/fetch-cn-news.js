@@ -322,16 +322,39 @@ async function main() {
     summary: generateSummary(period.key),
   };
 
-  // 确保目录存在
+  // v10.5.0：补齐 meta。旧版不写 meta，下游（send-mail / 邮件模板 / 健康面板）
+  // 无法判断这是降级内容，会当成正常 AI 稿件发出去。
+  const totalItems = (data.sections || []).reduce((acc, x) => acc + (x.items || []).length, 0);
+  data.meta = {
+    version: (function () { try { return require('../package.json').version; } catch (e) { return '0.0.0'; } })(),
+    schema: '4.0',
+    aiMode: false,
+    degradeReason: '热榜降级脚本（fetch-cn-news.js）：无 AI 参与',
+    quality: totalItems >= 10 ? 'FAIR' : 'LOW',
+    itemCount: totalItems,
+    commentaryCount: 0,
+    commentaryCoverage: 0,
+    headlineCount: (data.headline || []).length,
+    generatedAt: new Date().toISOString(),
+    period: period.key,
+  };
+
+  // 确保目录存在（原子写，避免并发读到半截 JSON）
   const dir = path.dirname(outputFile);
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-
-  fs.writeFileSync(outputFile, JSON.stringify(data, null, 2), 'utf8');
+  const tmpOut = outputFile + '.' + process.pid + '.tmp';
+  fs.writeFileSync(tmpOut, JSON.stringify(data, null, 2), 'utf8');
+  fs.renameSync(tmpOut, outputFile);
   console.log(`✓ 数据已保存到 ${outputFile} (${(fs.statSync(outputFile).size / 1024).toFixed(1)} KB)`);
   console.log(`  📰 头条: ${data.headline.length} | 版块: ${data.sections.length} | 趋势: ${data.summary.length}`);
 }
 
-main().catch((err) => {
-  console.error('❌ 错误:', err.message);
-  process.exit(1);
-});
+// v10.5.0：加 require.main 守卫，避免被 require 时立即执行一次抓取
+if (require.main === module) {
+  main().catch((err) => {
+    console.error('❌ 错误:', err.message);
+    process.exit(1);
+  });
+}
+
+module.exports = { main: main };

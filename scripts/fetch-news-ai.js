@@ -34,6 +34,10 @@ if (nodeVer < NODE_MIN) {
 }
 
 const ai = require('./ai-provider');
+const jsonRepair = require('./json-repair');
+
+// v10.5.0：单次 AI 调用的版块数与并发数（实测 4 版块会长到被 maxTokens 截断）
+const GROUP_SIZE = 2;
 
 // ─────────────────────────────────────────────
 //  Run lock 防重复
@@ -136,13 +140,78 @@ function getEnabledSections() {
 // ─────────────────────────────────────────────
 //  工具
 // ─────────────────────────────────────────────
+
+/** v10.5.0：项目版本号统一来源（不再硬写 v3.0/v4.0） */
+let _ver = null;
+function pkgVersion() {
+  if (_ver) return _ver;
+  try { _ver = require('../package.json').version; } catch (e) { _ver = '0.0.0'; }
+  return _ver;
+}
+
+/** v10.5.0：温度取配置值，参数仅作缺省兜底 */
+function tempOf(def) {
+  try {
+    const cfg = ai.getConfig();
+    if (cfg && Number.isFinite(Number(cfg.temperature))) return Number(cfg.temperature);
+  } catch (e) { /* 用默认 */ }
+  return def;
+}
+
+/**
+ * v10.5.0：按配置计算单次调用 maxTokens。
+ *
+ * 实测诊断（本轮抓包确认）：
+ *   本机使用的模型 raccoon/sn-sensenova-6-8-flash-lite 是**推理模型**，
+ *   先消耗推理 token 再产出正文。实测某次请求：
+ *     max_tokens=3600 → usage.completion_tokens=3600（全部被 reasoning_tokens 吃光）
+ *                        finish_reason=length, message.content=""（空字符串！）
+ *   旧代码把这个空串当正常返回 → JSON 解析失败 → 整组降级 → 邮件永远没有 AI 解读。
+ *
+ * 所以：翻译预算必须 > 推理开销 + 正文开销。给推理留 2000，正文按每版块 2200 估算，
+ * 整体封顶 16000（多数模型上限内）。同时 ai-provider 已有空响应重试兜底。
+ */
+function groupTokenBudget(sectionCount) {
+  let configured = 4096;
+  try {
+    const cfg = ai.getConfig();
+    configured = Number(cfg.maxTokens) || 4096;
+  } catch (e) { /* 默认 */ }
+  const reasoningHeadroom = 2000;
+  const need = reasoningHeadroom + Math.max(2200, (Number(sectionCount) || 1) * 2200);
+  return Math.min(16000, Math.max(configured, need));
+}
+
+/** 从错误信息判断是否为「上下文/额度超限」类失败，便于给出可操作的提示 */
+function explainTokenError(msg) {
+  const m = String(msg || '');
+  if (/max_tokens|max tokens|too large|context length|exceeds/i.test(m)) {
+    return '疑似 maxTokens 超过模型上限，请在 设置→AI 降低 maxTokens（建议 2000-4000）或改用更大上下文的模型';
+  }
+  if (/401|invalid.*key|authentication|Unauthorized/i.test(m)) return 'API Key 无效或已失效';
+  if (/402|insufficient|quota|balance/i.test(m)) return 'API 额度不足';
+  if (/429|rate/i.test(m)) return '触发限流，稍后重试';
+  if (/timeout|ETIMEDOUT|ECONN/i.test(m)) return 'AI 接口网络超时（检查 baseUrl 是否可达）';
+  return '';
+}
+
+/**
+ * v10.5.0：修复「字符串值内含未转义双引号」的非法 JSON。
+ *
+ * 实测根因：模型写中文内容时会用 ASCII 双引号包术语，例如
+ *   {"summary":"Anthropic正式递交招股书，冲刺"超级智能第一股"。..."}
+ * 这在 JSON 里非法，JSON.parse 直接抛错 → safeJSON 返回 null → 整组降级。
+ * 这才是"AI 解读长期消失"的真正原因（与 maxTokens、额度都无关）。
+ *
+ * 策略：逐字符扫描，在字符串内部遇到 " 时向后窥探首个非空白字符：
+ *   - 是 , } ] : 或已到末尾 → 视为合法的字符串结束
+ *   - 否则 → 是内嵌裸引号，转义为 \"
+ * 另处理反斜杠转义与非法控制符。失败则原样返回，交由上层继续兜底。
+ */
 function safeJSON(text) {
-  if (!text) return null;
-  text = text.replace(/```json\s*/gi, '').replace(/```/g, '').trim();
-  try { return JSON.parse(text); } catch(e) {}
-  const m = text.match(/\{[\s\S]*\}/) || text.match(/\[[\s\S]*\]/);
-  if (m) { try { return JSON.parse(m[0]); } catch(e) {} }
-  return null;
+  // v10.5.0：实现下沉到 json-repair.js（模型常在 JSON 字符串里写未转义引号，
+  // 旧版直接判定"格式错误"并整组降级 —— 这是 AI 解读长期消失的真正根因）
+  return jsonRepair.parseLoose(text);
 }
 
 async function retry(fn, maxRetries = 3, delay = 3000) {
@@ -158,38 +227,42 @@ async function retry(fn, maxRetries = 3, delay = 3000) {
 // ─────────────────────────────────────────────
 //  抓取热榜
 // ─────────────────────────────────────────────
-async function fetchHotBoard(type, limit = 6) {
-  try {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 8000);
-    const res = await fetch(`https://uapis.cn/api/v1/misc/hotboard?type=${type}`, { signal: controller.signal });
-    clearTimeout(timeout);
-    if (!res.ok) return [];
-    const data = await res.json();
-    const updateTime = data.update_time || data.data?.update_time || new Date().toISOString();
-    return (data.list || data.data?.list || []).slice(0, limit).map((item, i) => ({
-      raw_title: item.title || item.name,
-      raw_desc: (item.extra?.desc || item.desc || item.description || '').slice(0, 100),
-      hot: item.hot_value || item.hot || item.score,
-      rank: item.index || item.rank || i + 1,
-      url: item.url || item.link,
-      source: `${type}热榜`,
-      updateTime: updateTime,
-    }));
-  } catch (e) { return []; }
-}
-
 function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
+/**
+ * v10.5.0：热榜抓取统一交给 hotboard 模块（并发 + 可配置平台）。
+ * 旧实现在这里又串行抓 15 个平台 + 每平台 sleep 300ms，
+ * 与 fetchExtraNewsContext() 里的 hot.fetchAll() 完全重复，白白多花 20~30 秒且喂给 AI 一堆重复条目。
+ */
 async function fetchAllBoards() {
-  const types = ['zhihu', 'weibo', 'baidu', 'toutiao', 'sina', 'tieba', 'v2ex', 'kuaishou', 'sspai', 'ithome', '36kr', 'juejin', 'hupu', 'douyin', 'bilibili'];
-  const results = [];
-  for (const t of types) {
-    const r = await fetchHotBoard(t, 6);
-    if (r.length > 0) results.push({ type: t, items: r });
-    await sleep(300);
+  const out = [];
+  try {
+    const hot = require('./hotboard');
+    const store = getStore();
+    const enh = (store && store.get('enhance')) || {};
+    const types = Array.isArray(enh.hotTypes) && enh.hotTypes.length ? enh.hotTypes : null;
+    const results = await hot.fetchAllHotboards(types, { limit: 6, concurrency: 6 });
+    for (const r of results) {
+      if (r.error || !r.items.length) continue;
+      out.push({
+        type: r.type,
+        name: r.name,
+        category: r.category,
+        items: r.items.map((it) => ({
+          raw_title: it.title,
+          raw_desc: (it.summary || '').slice(0, 100),
+          hot: 10 - Math.min((it.rank || 1) - 1, 9),
+          rank: it.rank || 1,
+          url: it.link,
+          source: r.name,
+          updateTime: it.publishedAt,
+        })),
+      });
+    }
+  } catch (e) {
+    console.warn('  ⚠ 热榜抓取失败:', e.message);
   }
-  return results;
+  return out;
 }
 
 // ─────────────────────────────────────────────
@@ -407,32 +480,25 @@ const EXTRA_SOURCES = [
 async function fetchExtraNewsContext() {
   const allItems = [];
 
-  // ── A0) 中文热榜 + 游戏 + 行情（融合自 daily-news）──
+  // ── A0) Steam / Epic / 行情 / GitHub Trending ──
+  //     v10.5.0：中文热榜已改由 fetchAllBoards() 统一抓取，此处不再重复；
+  //     并把股票数据作为正常返回值传出（旧代码用 global.__LUMAPOST_STOCKS__ 且无人读取）。
+  const extras = { stocks: [], steam: [], epic: [], trending: [] };
   try {
     const hot = require('./hotboard');
     const store0 = getStore();
     const enhCfg = (store0 && store0.get('enhance')) || {};
     if (enhCfg.enableHotboard !== false) {
-      console.log('  ⏳ 中文热榜 / Steam / Epic / GitHub Trending...');
+      console.log('  ⏳ Steam / Epic / 行情 / GitHub Trending...');
       const t0 = Date.now();
-      const r = await hot.fetchAll({ limit: 8 });
-      const hotBoards = (r.hotboards || []).filter((x) => !x.error && x.items.length);
-
-      for (const hb of hotBoards) {
-        allItems.push({
-          source: hb.name,
-          category: hb.category,
-          items: hb.items.map((it) => ({
-            raw_title: it.title,
-            raw_desc: it.summary || '',
-            hot: 10 - Math.min((it.rank || 1) - 1, 9),
-            rank: it.rank || 1,
-            url: it.link,
-            source: hb.name,
-            updateTime: it.publishedAt,
-          })),
-        });
-      }
+      const r = await hot.fetchAll({
+        limit: 8,
+        hotTypes: [],           // 传空数组：跳过热榜（由 fetchAllBoards 负责）
+        steam: enhCfg.steam !== false,
+        epic: enhCfg.epic !== false,
+        stocks: enhCfg.stocks !== false,
+        trending: enhCfg.trending !== false,
+      });
 
       const pushGroup = (r2, name, cat) => {
         if (r2 && r2.items && r2.items.length) {
@@ -449,25 +515,28 @@ async function fetchExtraNewsContext() {
               updateTime: it.publishedAt,
             })),
           });
+          extras[cat === 'games' ? (name.indexOf('Epic') >= 0 ? 'epic' : 'steam') : 'trending'] = r2.items;
+        } else if (r2 && r2.error) {
+          console.log('    · ' + name + ' 不可用: ' + r2.error);
         }
       };
       pushGroup(r.steam, 'Steam 特惠', 'games');
       pushGroup(r.epic, 'Epic 限免', 'games');
       pushGroup(r.trending, 'GitHub Trending', 'github');
 
-      // 行情单独挂到全局，由主流程读取
-      if (r.stocks && r.stocks.items && r.stocks.items.length) {
-        global.__LUMAPOST_STOCKS__ = r.stocks.items;
-      }
+      if (r.stocks && r.stocks.items && r.stocks.items.length) extras.stocks = r.stocks.items;
 
-      const okHot = hotBoards.length;
-      console.log(`  ✓ 热榜 ${okHot}/${(r.hotboards || []).length} · Steam ${r.steam.items.length} · Epic ${r.epic.items.length} · GitHub ${r.trending.items.length} · 股票 ${r.stocks.items.length}  (${((Date.now() - t0) / 1000).toFixed(1)}s)`);
+      console.log(`  ✓ Steam ${extras.steam.length} · Epic ${extras.epic.length} · GitHub ${extras.trending.length} · 行情 ${extras.stocks.length}  (${((Date.now() - t0) / 1000).toFixed(1)}s)`);
     }
   } catch (e) {
-    console.log(`  ⚠ 热榜模块不可用: ${e.message}`);
+    console.log(`  ⚠ 增强数据源不可用: ${e.message}`);
   }
 
   // ── A) RSS 订阅源（内置目录 + 用户自定义，优先）──
+  //     v10.5.0 修复：旧代码在这里 `return allItems`，导致一旦配置了 RSS，
+  //     后面的 AIbase / IT之家 / Hacker News / Product Hunt 等源永不执行。
+  //     现在 RSS 与网页源并存，由 sourceMix 开关决定。
+  let rssOk = false;
   try {
     const rssFetcher = require('./rss-fetcher');
     const store = getStore();
@@ -480,7 +549,6 @@ async function fetchExtraNewsContext() {
       const results = await rssFetcher.fetchAll(userRss, { concurrency: 8, limit: 8, timeout: 15000 });
       const agg = rssFetcher.aggregate(results, { limit: 20 });
 
-      // 按源分组塞进 boards
       for (const r of results) {
         if (!r.error && r.items.length) {
           allItems.push({
@@ -500,43 +568,75 @@ async function fetchExtraNewsContext() {
       }
 
       const okCount = results.filter((r) => !r.error && r.items.length).length;
+      const failed = results.filter((r) => r.error);
+      rssOk = okCount > 0;
       console.log(`  ✓ RSS: ${okCount}/${results.length} 成功，去重后 ${agg.total} 条，耗时 ${((Date.now() - t0) / 1000).toFixed(1)}s`);
-      return allItems; // RSS 已足够，沿用旧逻辑会重复
+      if (failed.length) {
+        console.log(`    ├ 失败源 ${failed.length} 个，Top3: ` + failed.slice(0, 3).map(f => f.name + '(' + (f.error || '?') + ')').join(', '));
+        extras.rssErrors = failed.map(f => ({ name: f.name, error: f.error }));
+      }
+      extras.rssStats = { total: results.length, ok: okCount, items: agg.total };
     }
   } catch (e) {
     console.log(`  ⚠ RSS 引擎不可用: ${e.message}`);
   }
 
-  // ── B) 旧版 EXTRA_SOURCES（无 RSS 配置时回退）──
-  for (const src of EXTRA_SOURCES) {
-    try {
-      let items = [];
-      if (src.fetch) {
-        console.log(`  ⏳ ${src.name}: API 获取中...`);
-        items = await src.fetch();
-      } else if (src.url) {
-        const controller = new AbortController();
-        const to = setTimeout(() => controller.abort(), 10000);
-        const res = await fetch(src.url, { signal: controller.signal, headers: { 'User-Agent': 'Mozilla/5.0' } });
-        clearTimeout(to);
-        if (!res.ok) { console.log(`  ⚠ ${src.name}: HTTP ${res.status}`); continue; }
-        const html = await res.text();
-        items = src.extract(html);
-      }
-      if (items.length > 0) {
-        allItems.push({ source: src.name, items });
-        console.log(`  ✓ ${src.name}: ${items.length} 条`);
-      } else {
-        console.log(`  ⚠ ${src.name}: 无数据`);
-      }
-    } catch (e) { console.log(`  ⚠ ${src.name}: ${e.message}`); }
+  // ── B) 网页/API 源：RSS 不通时必跑；RSS 正常时按配置决定是否并跑 ──
+  const store1 = getStore();
+  const mix = (store1 && store1.get('sources.useWebFallback')) !== false; // 默认 true
+  if (!rssOk || mix) {
+    console.log(rssOk ? '  ⏳ 网页源补充（useWebFallback=开）...' : '  ⏳ 网页源抓取（RSS 无数据，必须启用）...');
+    for (const src of EXTRA_SOURCES) {
+      try {
+        let items = [];
+        if (src.fetch) {
+          items = await src.fetch();
+        } else if (src.url) {
+          const controller = new AbortController();
+          const to = setTimeout(() => controller.abort(), 10000);
+          const res = await fetch(src.url, { signal: controller.signal, headers: { 'User-Agent': 'Mozilla/5.0' } });
+          clearTimeout(to);
+          if (!res.ok) { console.log(`  ⚠ ${src.name}: HTTP ${res.status}`); continue; }
+          const html = await res.text();
+          items = src.extract(html);
+        }
+        if (items.length > 0) {
+          allItems.push({ source: src.name, category: guessCategory(src.name), items: items.map((it, i) => Object.assign({
+            hot: 10 - Math.min(i, 9), rank: i + 1, raw_desc: it.raw_desc || '',
+          }, it)) });
+          console.log(`  ✓ ${src.name}: ${items.length} 条`);
+        } else {
+          console.log(`  ⚠ ${src.name}: 无数据`);
+        }
+      } catch (e) { console.log(`  ⚠ ${src.name}: ${e.message}`); }
+    }
   }
-  return allItems;
+
+  extras.allItems = allItems;
+  return extras;
+}
+
+/** 网页源分类推断（供关键词过滤用） */
+function guessCategory(name) {
+  const n = String(name || '');
+  if (/AI|ai-bot|猫目/i.test(n)) return 'ai';
+  if (/IT之家|数码|CNMO/i.test(n)) return 'hardware';
+  if (/GitHub|Product Hunt|Hacker/i.test(n)) return 'github';
+  return 'news';
 }
 
 // ─────────────────────────────────────────────
 //  关键词过滤热榜 — 为指定版块筛选相关热榜条目
 // ─────────────────────────────────────────────
+/**
+ * v10.5.0：按版块过滤素材，并通过 MATERIAL_LIMIT 控制喂给 AI 的条数。
+ *
+ * 为什么限制：本机模型是**推理型**，prompt 越长推理 token 越多，
+ * 实测喂 30+ 条素材时 reasoning_tokens 直接飙到 12800+ 把正文预算吃光，
+ * 返回空 content。把素材压到每版块 6 条后推理开销明显下降。
+ */
+const MATERIAL_LIMIT = 6;
+
 function filterBoardsForSection(sectionKey, boards) {
   const keywords = SECTION_KEYWORDS[sectionKey] || [sectionKey];
   const relevant = [];
@@ -559,14 +659,18 @@ function filterBoardsForSection(sectionKey, boards) {
   }
 
   relevant.sort((a, b) => (b.hot || 0) - (a.hot || 0));
-  return relevant.slice(0, 8);
+  return relevant.slice(0, MATERIAL_LIMIT);
 }
 
-function boardsItemsToText(items) {
+/** v10.5.0：素材行也做长度压缩 —— 长摘要会显著推高推理模型的 reasoning_tokens */
+function boardsItemsToText(items, maxDesc) {
   if (!items || items.length === 0) return '暂无相关热榜数据';
-  return items.map(i =>
-    `[${i.sourcePlatform || i.source}#${i.rank || '?'}] ${i.raw_title}${i.raw_desc ? ' — ' + i.raw_desc : ''}${i.updateTime ? ' (' + i.updateTime + ')' : ''}`
-  ).join('\n');
+  const cap = Number(maxDesc) || 40;
+  return items.map(i => {
+    const desc = i.raw_desc ? String(i.raw_desc).slice(0, cap) : '';
+    return '[' + (i.sourcePlatform || i.source || '热榜') + '#' + (i.rank || '?') + '] '
+      + String(i.raw_title || '').slice(0, 70) + (desc ? ' — ' + desc : '');
+  }).join('\n');
 }
 
 // ─────────────────────────────────────────────
@@ -587,7 +691,7 @@ async function generateSectionGroup(group, periodCfg) {
     }
   }
   const mergedItems = [...allItemsMap.values()];
-  const boardsText = boardsItemsToText(mergedItems);
+  const boardsText = boardsItemsToText(mergedItems, 40);
 
   const prompt = `你是 LumaPost 光影邮报的新闻主编。当前时段：${periodCfg.label}（${periodCfg.focus}）。
 当前日期：${new Date().toLocaleDateString('zh-CN')}。
@@ -601,7 +705,7 @@ ${sectionsDesc}
 ${boardsText}
 
 ━━━━━━━━━━━━━━━━━━━━━
-任务：为上述 4 个版块各生成尽可能多的新闻（至少 3 条，没有上限，获取到几条就生成几条）。
+任务：为上述 4 个版块各生成 3-4 条新闻（每版块最多 5 条；总量有预算上限，超出的会被丢弃，请勿堆量）。
 
 规则：
 1. 每条新闻必须与版块主题严格匹配——不要把游戏新闻放到 AI 版块
@@ -614,9 +718,18 @@ ${boardsText}
    - 给出正反面分析：谁受益？谁受损？有什么风险？
    - 结尾一句有态度的判断（"我认为...""值得注意的是..."）
    - 严禁空洞套话，必须有具体观点和数据/对比
-6. quicknote 犀利短评(15-30字)：像脱口秀一样幽默有态度
+6. **quicknote 是「读完后的简要概括」**（50-80 字）：
+   - 你要假设读者只读这一句就知道这条新闻到底讲了什么
+   - 用一句话把核心事实 + 最关键的那个数字/结论说清楚
+   - 不要评价、不要态度、不要「值得关注」这类空话，就是纯粹的信息浓缩
+   - 严禁写来源、平台名、排名、"#1" 之类元信息
 7. source 标注来源平台（如"知乎""微博""36氪"等）
 8. time 字段使用素材中标注的时间（ISO 8601 格式）；若无则用当前时间
+
+【JSON 合法性要求（极重要，违反会导致整组内容被丢弃）】
+- 字段值内禁止出现未转义的英文双引号 " ；需要引用术语时使用中文引号「」或『』
+- 字段值内禁止出现换行符；保持单行
+- 只输出 JSON 本身，不要 markdown 代码块围栏，不要任何解释文字
 
 严格返回以下 JSON 格式（只返回 JSON，不要解释）：
 {
@@ -624,7 +737,7 @@ ${boardsText}
     {
       "sectionKey": "${group[0].key}",
       "items": [
-        {"title":"新闻标题","summary":"60-120字摘要","commentary":"100-200字AI深度解析（必填，必须有具体观点）","quicknote":"犀利短评","source":"来源","url":"https://...","time":"2026-07-01T11:30:00.000Z"}
+        {"title":"新闻标题","summary":"60-120字摘要","commentary":"100-200字AI深度解析（必填，必须有具体观点）","quicknote":"50-80字读完后的简要概括，只讲事实不讲态度","source":"来源","url":"https://...","time":"2026-07-01T11:30:00.000Z"}
       ]
     },
     {
@@ -635,8 +748,11 @@ ${boardsText}
   ]
 }`;
 
+  // v10.5.0：maxTokens 尊重配置（旧代码硬写 16000，让 UI 里的 AI_MAX_TOKENS 完全失效，
+  //          且小上下文模型直接超限报错 → 被 catch 吞掉 → 静默降级）
+  const budget = groupTokenBudget(group.length);
   const text = await retry(() =>
-    ai.chat([{ role: 'user', content: prompt }], { temperature: 0.6, maxTokens: 16000 })
+    ai.chat([{ role: 'user', content: prompt }], { temperature: tempOf(0.6), maxTokens: budget })
   );
 
   const data = safeJSON(text);
@@ -664,10 +780,10 @@ ${boardsText}
           commentary: item.commentary || '',
           quicknote: item.quicknote || '',
           source: item.source || '综合',
-          url: item.url || 'https://uapis.cn',
+          url: item.url || '',          // v10.5.0：不再用 https://uapis.cn 冒充原文链接
           time: validTime,
           stars: Math.max(2, 5 - i),
-          verified: true,
+          verified: false,              // v10.5.0：AI 生成内容不做"已核实"承诺
         }}),
       });
     } else {
@@ -681,16 +797,55 @@ ${boardsText}
   return results;
 }
 
+/**
+ * v10.5.1：降级/兜底条目的一句话概括。
+ *
+ * 旧实现把 quicknote 写成 `来源 #排名`（如 `csdn #1`），
+ * 这在邮件里表现为一个显眼的淡紫色空框 —— 它既不是信息也不是概括，
+ * 只是把内部分类元数据泄漏给了读者。现在改为：
+ *   优先用素材自带的描述浓缩成一句话；没有描述就直接留空，不生成占位噪声。
+ */
+function plainBrief(item) {
+  const desc = String((item && (item.raw_desc || item.summary)) || '').trim();
+  if (desc.length >= 12) {
+    // 去掉常见的站内噪声前缀，压到 60 字以内，作为「读完后的简要概括」
+    const cleaned = desc
+      .replace(/^(【[^】]{1,12}】|据[^，,]{1,20}[，,])/, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+    if (cleaned.length >= 12) {
+      return cleaned.length > 60 ? cleaned.slice(0, 60) + '…' : cleaned;
+    }
+  }
+  return '';
+}
+
+/**
+ * v10.5.0：AI 某版块返回缺失时的兜底 —— 用该版块已过滤的真实热榜条目，
+ * 不再编造「XX 今日速览 / 今日平静」这类占位假新闻发给收件人。
+ */
 function fallbackItemsForSection(sec) {
-  return [{
-    title: `${sec.name} 今日速览`,
-    summary: `今日「${sec.name}」领域暂无重大热点事件，可关注后续更新。`,
-    quicknote: '今日平静',
-    source: 'LumaPost',
-    url: 'https://uapis.cn',
-    time: new Date().toISOString(),
-    stars: 2, verified: true,
-  }];
+  const real = (sec._filteredBoards || [])
+    .filter(it => it && it.raw_title && it.sourcePlatform)   // 只认真实来源，过滤掉兜底塞入的无关条目
+    .slice(0, 5)
+    .map((item, i) => ({
+      title: item.raw_title,
+      summary: item.raw_desc || '',
+      commentary: '',
+      quicknote: plainBrief(item),
+      source: String(item.sourcePlatform || '热榜'),
+      url: item.url || '',
+      time: item.updateTime || new Date().toISOString(),
+      stars: Math.max(2, 5 - i),
+      verified: false,
+      degraded: true,
+    }));
+  if (real.length) {
+    console.warn(`    · ${sec.name}: AI 未返回，回落 ${real.length} 条真实热榜（无解读）`);
+    return real;
+  }
+  console.warn(`    · ${sec.name}: AI 未返回且无真实素材 → 丢弃该版块（不编造内容）`);
+  return [];
 }
 
 // ─────────────────────────────────────────────
@@ -731,6 +886,8 @@ ${contextText}
 
 趋势包含：category(领域名+emoji) / trend(核心趋势一句话) / **detail(80-150字深度分析)**
 
+【同上 JSON 合法性要求：值内不得有未转义英文双引号（用「」）、不得有换行符、只输出 JSON】
+
 严格返回 JSON（只返回 JSON）：
 {
   "tldr": "一句话总结",
@@ -748,8 +905,9 @@ ${contextText}
   ]
 }`;
 
+  // v10.5.0：maxTokens 取配置（旧硬写 16000）
   const text = await retry(() =>
-    ai.chat([{ role: 'user', content: prompt }], { temperature: 0.6, maxTokens: 16000 })
+    ai.chat([{ role: 'user', content: prompt }], { temperature: tempOf(0.5), maxTokens: groupTokenBudget(4) })
   );
 
   const data = safeJSON(text);
@@ -836,6 +994,11 @@ function getQuote(period) {
 // ─────────────────────────────────────────────
 //  股市数据（Sina API，GBK编码）
 // ─────────────────────────────────────────────
+/**
+ * v10.5.0：Sina 行情兜底（正常情况由 hotboard.fetchStocks 提供）。
+ * s_ 简式返回：名称,现价,涨跌额,涨跌幅%,成交量,成交额
+ * （注意与全量格式 hq_str_sh000001 的字段顺序不同，全量格式现价在 p[3]）
+ */
 async function fetchStockData() {
   try {
     const controller = new AbortController();
@@ -896,12 +1059,13 @@ async function main() {
     process.exit(0);
   }
 
-  console.log(`🚀 LumaPost ${periodCfg.label} 新闻抓取 (v4.0)`);
+  console.log(`🚀 LumaPost ${periodCfg.label} 新闻抓取 (v${pkgVersion()})`);
   console.log(`📍 时段: ${periodCfg.label} | 重点: ${periodCfg.focus}`);
+  const tStart = Date.now();
   try {
-    console.log(`🤖 AI: ${ai.getConfig().providerName} (${ai.getConfig().model})`);
+    console.log(`🤖 AI: ${ai.getConfig().providerName} (${ai.getConfig().model}) · maxTokens≤${ai.getConfig().maxTokens}`);
   } catch (e) {
-    console.log(`⚠️ AI 未配置，将使用降级模式: ${e.message}`);
+    console.log(`⚠️ AI 未配置，将使用降级模式: ${String(e.message).split('\n')[0]}`);
   }
   console.log();
 
@@ -912,9 +1076,11 @@ async function main() {
   }
 
   let aiMode = true;
+  let aiDegradeReason = null;
   try { ai.getConfig(); } catch (e) {
     aiMode = false;
-    console.log(`⚠️ AI 模式不可用，使用纯热榜降级模式`);
+    aiDegradeReason = 'AI 未配置/不可用';
+    console.log(`⚠️ [degraded] AI 模式不可用 → 纯热榜模式（无深度解读）`);
   }
 
   try {
@@ -924,21 +1090,29 @@ async function main() {
   const boards = await fetchAllBoards();
   console.log(`  ✓ ${boards.length} 平台，${boards.reduce((s,b)=>s+b.items.length,0)} 条`);
 
-  // ── 1.5) 额外信息源 ──
+  // ── 1.5) 额外信息源（RSS + 网页源 + Steam/Epic/行情/Trending）──
   console.log('\n🔗 抓取额外信息源...');
-  const extraSources = await fetchExtraNewsContext();
-  // 将额外信息源混入 boards（作为独立平台处理）
+  const extras = await fetchExtraNewsContext();
+  const extraSources = extras.allItems || [];
+  // v10.5.0：额外源并入 boards 时按 source 去重，避免同一标题反复喂给 AI
+  const seenBoardItem = new Set();
   for (const es of extraSources) {
     const fetchedAt = new Date().toISOString();
-    boards.push({ type: es.source, items: es.items.map((item, i) => ({
+    const items = (es.items || []).filter((item) => {
+      const k = String(item.raw_title || '').trim().toLowerCase();
+      if (!k || seenBoardItem.has(k)) return false;
+      seenBoardItem.add(k);
+      return true;
+    }).map((item, i) => ({
       raw_title: item.raw_title,
       raw_desc: item.raw_desc || '',
       hot: 10 - Math.min(i, 9),
       rank: i + 1,
       url: item.url,
       source: item.source,
-      updateTime: fetchedAt,
-    }))});
+      updateTime: item.updateTime || fetchedAt,
+    }));
+    if (items.length) boards.push({ type: es.source, name: es.source, category: es.category, items });
   }
   console.log(`  ✓ 共计 ${boards.length} 个信息源，${boards.reduce((s,b) => s + b.items.length, 0)} 条新闻`);
 
@@ -955,45 +1129,56 @@ async function main() {
   let tldr = '', headlines = [], sectionsData = [], summary = [];
 
   if (aiMode) {
-    // 4 组 × 4 版块
+    // v10.5.0：每组版块数由 GROUP_SIZE 控制（默认 2）。
+    // 实测：一次让模型输出 4 版块 × 3-4 条含长解读的内容，响应会被 maxTokens 截断，
+    // JSON 不闭合 → 整组降级。改成每组 2 个版块后输出量减半，可稳定解析。
+    // 由 fetch-news-ai.GROUP_SIZE 或 config.ai.groupSize 控制，并发数由 AI_CONCURRENCY 控制。
+    const cfgAll = getStore() ? (getStore().getAll() || {}) : {};
+    const groupSize = Math.max(1, Math.min(4, Number(process.env.AI_GROUP_SIZE)
+      || Number((cfgAll.ai || {}).groupSize) || GROUP_SIZE));
+    const concurrency = Math.max(1, Math.min(4, Number(process.env.AI_CONCURRENCY)
+      || Number((cfgAll.ai || {}).concurrency) || 1));
+
     const groups = [];
-    for (let i = 0; i < sections.length; i += 4) {
-      groups.push(sections.slice(i, i + 4));
+    for (let i = 0; i < sections.length; i += groupSize) {
+      groups.push(sections.slice(i, i + groupSize));
     }
 
-    console.log(`\n🧠 AI 分组生成（${groups.length} 组，每组 4 版块）...`);
+    console.log(`\n🧠 AI 分组生成（${groups.length} 组，每组 ${groupSize} 版块，并发 ${concurrency}）...`);
 
     const allResults = [];
+    let failedGroups = 0;
 
     try {
-      // 第1批：组 0,1 并行
-      if (groups.length >= 2) {
-        console.log('  ⏳ 第1批（组1+组2）并行...');
-        const [r0, r1] = await Promise.all([
-          generateSectionGroup(groups[0], periodCfg),
-          generateSectionGroup(groups[1], periodCfg),
-        ]);
-        allResults.push(...r0, ...r1);
-        console.log(`  ✓ 组1(${r0.length}版块) + 组2(${r1.length}版块)`);
-      } else {
-        const r0 = await generateSectionGroup(groups[0], periodCfg);
-        allResults.push(...r0);
-      }
-
-      // 第2批：组 2,3 并行
-      if (groups.length > 2) {
-        console.log('  ⏳ 第2批（组3+组4）并行...');
-        const promises = [];
-        if (groups[2]) promises.push(generateSectionGroup(groups[2], periodCfg));
-        if (groups[3]) promises.push(generateSectionGroup(groups[3], periodCfg));
-        const results = await Promise.all(promises);
-        for (const r of results) allResults.push(...r);
-        console.log(`  ✓ 组3(${results[0]?.length || 0}版块) + 组4(${results[1]?.length || 0}版块)`);
+      // 分批并行，批内并发受 concurrency 限制
+      for (let g = 0; g < groups.length; g += concurrency) {
+        const batch = groups.slice(g, g + concurrency);
+        const labels = batch.map((_, i) => '组' + (g + i + 1)).join('+');
+        console.log(`  ⏳ 第${Math.floor(g / concurrency) + 1}批（${labels}）并行...`);
+        const results = await Promise.all(batch.map(grp =>
+          generateSectionGroup(grp, periodCfg).catch(e => {
+            console.log(`    ⚠ 组异常: ${String(e.message).slice(0, 120)}`);
+            return grp.map(sec => ({
+              key: sec.key, name: sec.name, colorKey: sec.colorKey,
+              items: fallbackItemsForSection(sec),
+            }));
+          })
+        ));
+        for (const r of results) {
+          const before = r.filter(x => (x.items || []).some(i => i.commentary)).length;
+          if (before === 0) failedGroups++;
+          allResults.push(...r);
+        }
+        console.log(`  ✓ ${labels} 完成（累计 ${allResults.length} 版块）`);
       }
 
       sectionsData = allResults;
       const totalItems = sectionsData.reduce((s, sec) => s + sec.items.length, 0);
-      console.log(`  ✅ 全部版块生成完成: ${sectionsData.length} 版块 / ${totalItems} 条新闻`);
+      const withCm = sectionsData.reduce((s, sec) => s + (sec.items || []).filter(i => i.commentary).length, 0);
+      console.log(`  ✅ 全部版块生成完成: ${sectionsData.length} 版块 / ${totalItems} 条新闻 / ${withCm} 条含解读`);
+      if (failedGroups > 0) {
+        console.log(`    ⚠ ${failedGroups}/${groups.length} 组未拿到 AI 内容（已用真实热榜补位，无解读）`);
+      }
 
       // ── 4) 生成头条 + TLDR + 趋势 ──
       console.log('\n📰 生成头条 & TLDR & 趋势...');
@@ -1003,61 +1188,102 @@ async function main() {
       summary = hsResult.summary;
       console.log(`  ✓ TLDR: ${tldr.slice(0, 30)}... | 头条: ${headlines.length} | 趋势: ${summary.length}`);
 
+      // v10.5.0：全部版块都没有解读 = 实质降级，必须如实标记，不能靠条数粉饰
+      const withCmAll = sectionsData.reduce((s, sec) => s + (sec.items || []).filter(i => i.commentary).length, 0);
+      if (withCmAll === 0) {
+        aiDegradeReason = 'AI 调用成功但所有版块均未产出解读内容（可能被截断或模型能力不足）';
+        aiMode = false;
+        console.error('  ⚠ [degraded] ' + aiDegradeReason);
+      }
+
     } catch (e) {
-      console.log(`  ⚠ AI 生成失败: ${e.message}`);
-      console.log(`  📊 使用降级模式（纯热榜数据）`);
+      // v10.5.0：降级不再静默 —— 明确记录原因并打 [degraded] 标记
+      const why = explainTokenError(e.message);
+      aiDegradeReason = String(e.message).slice(0, 300) + (why ? ' ▸ ' + why : '');
+      console.error(`  ⚠ [degraded] AI 生成失败: ${aiDegradeReason}`);
+      if (why) console.error(`  💡 建议: ${why}`);
+      console.error(`  📊 回落为热榜直连模式（无 AI 解读、无头条深度分析）`);
       aiMode = false;
     }
   }
 
   // 降级：不用 AI
-  if (!aiMode) {
-    tldr = `${periodCfg.label}（降级模式）`;
+  // v10.5.0 修复：旧实现只要 aiMode=false 就整体重建 sectionsData，
+  // 会把「部分组成功、部分组失败」时已经拿到的 AI 内容全部丢掉。
+  // 现在的规则：只要已经有带解读的版块，就保留它们；仅失败版块用真实热榜补位。
+  const hasAiContent = sectionsData.some(sec => (sec.items || []).some(i => i.commentary));
+  if (!aiMode && !hasAiContent) {
+    tldr = `${periodCfg.label} · 热榜直选（AI 主编未参与）`;
     sectionsData = sections.length > 0 ? sections.map(sec => {
-      const items = sec._filteredBoards && sec._filteredBoards.length > 0
-        ? sec._filteredBoards.map((item, i) => ({
+      const items = (sec._filteredBoards || [])
+        .filter(item => item && item.raw_title)
+        .map((item, i) => ({
             title: item.raw_title,
-            summary: item.raw_desc || item.raw_title,
-            quicknote: `${item.sourcePlatform || '热榜'} #${item.rank || i+1}`,
-            source: `${item.sourcePlatform}热榜`,
-            url: item.url || 'https://uapis.cn',
+            summary: item.raw_desc || '',
+            commentary: '',                 // v10.5.0：降级时不再编造"AI 解读"
+            quicknote: plainBrief(item),    // v10.5.1：不再输出「来源 #排名」元数据
+            source: `${item.sourcePlatform || '热榜'}`,
+            url: item.url || '',
             time: (() => {
               if (!item.updateTime) return new Date().toISOString();
               const t = new Date(item.updateTime);
               return (t && !isNaN(t.getTime())) ? t.toISOString() : new Date().toISOString();
             })(),
-            stars: Math.max(2, 5 - i), verified: true,
+            stars: Math.max(2, 5 - i),
+            verified: false,                 // v10.5.0：降级条目不再标 verified:true
+            degraded: true,
           }))
-        : fallbackItemsForSection(sec);
+        .slice(0, 6);
+      // v10.5.0：无内容的版块直接丢弃，不再用"今日速览/今日平静"占位造假新闻
       return { key: sec.key, name: sec.name, colorKey: sec.colorKey, items };
-    }) : [];
-    headlines = sectionsData.flatMap(s => s.items.slice(0, 1).map(i => ({
-      title: i.title, summary: i.summary, commentary: `今日「${s.name}」最受关注的热点话题。`,
-      source: i.source, url: i.url, time: i.time, verified: true,
-    }))).slice(0, 3);
-    summary = [
-      { category:'🤖 AI', trend:'热榜驱动趋势', detail:'基于今日热榜数据汇总的 AI 领域动态。' },
-      { category:'💻 硬件', trend:'热榜驱动趋势', detail:'基于今日热榜数据汇总的硬件领域动态。' },
-      { category:'💰 财经', trend:'热榜驱动趋势', detail:'基于今日热榜数据汇总的财经领域动态。' },
-      { category:'🌍 国际', trend:'热榜驱动趋势', detail:'基于今日热榜数据汇总的国际领域动态。' },
-    ];
+    }).filter(sec => sec.items.length > 0) : [];
+
+    headlines = sectionsData.slice(0, 3).map(s => {
+      const i = s.items[0];
+      return {
+        title: i.title, summary: i.summary, commentary: '',
+        source: i.source, url: i.url, time: i.time, degraded: true,
+      };
+    });
+    summary = [];
+    if (!sectionsData.length) {
+      console.error('  ❌ [degraded] 降级模式下也没有任何热榜内容 —— 请检查网络/热榜接口可用性');
+    }
   }
 
-  // ── 5) 股市数据 ──
-  const stocks = await fetchStockData();
+  // ── 5) 股市数据（v10.5.0：优先复用 extras 已抓到的，避免重复请求新浪）──
+  let stocks = null;
+  if (extras && Array.isArray(extras.stocks) && extras.stocks.length) {
+    stocks = extras.stocks.map(s => ({
+      name: s.name,
+      price: s.current != null ? Number(s.current).toFixed(2) : (s.price || ''),
+      change: (s.change >= 0 ? '+' : '') + (typeof s.change === 'number' ? s.change.toFixed(2) : (s.change || '')),
+      pct: (s.pct >= 0 ? '+' : '') + (typeof s.pct === 'number' ? s.pct.toFixed(2) : (s.pct || '')) + '%',
+    }));
+  } else {
+    stocks = await fetchStockData();
+  }
   if (stocks) {
-    console.log(`\n📈 股市: ${stocks.map(s => `${s.name} ${s.price}(${s.pct})`).join(' | ')}`);
+    console.log(`\n📈 行情: ${stocks.map(s => `${s.name} ${s.price}(${s.pct})`).join(' | ')}`);
+  } else {
+    console.log('\n📈 行情: 未取到数据');
   }
 
   // ── 6) 天气 ──
   const weather = await fetchWeather();
 
-  // ── 7) 完整性检查 ──
+  // ── 7) 质量判定（v10.5.0：不再只看条数，必须看 AI 参与度与解读覆盖率）──
   const totalItems = sectionsData.reduce((s, sec) => s + sec.items.length, 0);
-  const quality = totalItems >= 40 ? 'GOOD' : totalItems >= 20 ? 'DEGRADED' : 'LOW';
+  const withCommentary = sectionsData.reduce((s, sec) => s + (sec.items || []).filter(i => i.commentary).length, 0);
+  const commentaryCoverage = totalItems ? Math.round(withCommentary / totalItems * 100) / 100 : 0;
+  let quality;
+  if (!aiMode) quality = 'DEGRADED';
+  else if (totalItems >= 12 && commentaryCoverage >= 0.6) quality = 'GOOD';
+  else if (totalItems >= 6) quality = 'FAIR';
+  else quality = 'LOW';
 
   const data = {
-    date: `${new Date().getFullYear()}年${new Date().getMonth()+1}月${new Date().getDate()}日`,
+    date: `${new Date().getFullYear()}年${new Date().getMonth() + 1}月${new Date().getDate()}日`,
     timeWindow: periodCfg.timeWindow,
     greetingType: periodCfg.greetingType,
     greeting: periodCfg.greeting,
@@ -1069,24 +1295,56 @@ async function main() {
     sections: sectionsData.filter(s => s.items && s.items.length > 0),
     summary,
     meta: {
-      version: '3.0',
+      version: pkgVersion(),
+      schema: '4.0',
       aiMode,
+      degradeReason: aiDegradeReason,
       quality,
+      itemCount: totalItems,
+      commentaryCount: withCommentary,
+      commentaryCoverage,
+      headlineCount: headlines.length,
+      sourceCount: boards.length,
+      rssStats: (extras && extras.rssStats) || null,
+      failedSources: (extras && extras.rssErrors) || [],
+      durationMs: Date.now() - tStart,
       generatedAt: new Date().toISOString(),
       period: periodKey,
     },
   };
 
-  // ── 8) 写入文件 ──
+  // ── 8) 写入文件（原子写，避免 send-mail 读到半截 JSON）──
   const dir = path.dirname(outputFile);
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-  fs.writeFileSync(outputFile, JSON.stringify(data, null, 2), 'utf8');
+  const tmpOut = outputFile + '.' + process.pid + '.tmp';
+  fs.writeFileSync(tmpOut, JSON.stringify(data, null, 2), 'utf8');
+  fs.renameSync(tmpOut, outputFile);
 
-  console.log(`\n✅ 完成！(${quality})`);
-  console.log(`📂 ${outputFile} (${(fs.statSync(outputFile).size/1024).toFixed(1)} KB)`);
-  console.log(`📊 头条 ${data.headline.length} | 版块 ${data.sections.length} | 趋势 ${data.summary.length} | 新闻 ${totalItems} 条`);
-  if (quality === 'LOW') {
-    console.warn(`⚠️ 内容质量偏低，请检查 AI API 余额或热榜数据源。`);
+  // ── 9) 回写抓取历史（v10.5.0：旧版只由 scheduler 补写，UI 入口的记录永远停在"运行中"）──
+  try {
+    const st = getStore();
+    if (st) {
+      st.addHistory('fetchHistory', {
+        title: `${periodCfg.label}抓取 · ${data.date}`,
+        status: quality === 'LOW' ? '失败' : '完成',
+        quality: quality,
+        aiMode: aiMode,
+        items: totalItems,
+        commentary: withCommentary,
+        sources: boards.length,
+        seconds: Math.round((Date.now() - tStart) / 1000),
+        error: aiDegradeReason || undefined,
+      });
+    }
+  } catch (e) { console.warn('  ⚠ 历史写入失败:', e.message); }
+
+  console.log(`\n✅ 完成！质量=${quality} 用时=${((Date.now() - tStart) / 1000).toFixed(1)}s`);
+  console.log(`📂 ${outputFile} (${(fs.statSync(outputFile).size / 1024).toFixed(1)} KB)`);
+  console.log(`📊 头条 ${data.headline.length} | 版块 ${data.sections.length} | 趋势 ${data.summary.length} | 新闻 ${totalItems} 条 | 含解读 ${withCommentary} 条 (${Math.round(commentaryCoverage * 100)}%)`);
+  if (!aiMode) {
+    console.warn(`⚠️ [degraded] 本期为热榜直连模式，无 AI 解读。原因: ${aiDegradeReason || 'AI 未配置'}`);
+  } else if (quality === 'LOW') {
+    console.warn(`⚠️ 内容量偏低（${totalItems} 条 / 解读覆盖 ${Math.round(commentaryCoverage * 100)}%），请检查 AI 额度或数据源。`);
   }
 
   } finally {
@@ -1095,7 +1353,32 @@ async function main() {
   }
 }
 
-main().catch(err => {
-  console.error('❌', err.message);
-  process.exit(1);
-});
+// v10.5.0：加 require.main 守卫。
+// 旧版没有守卫，而 package.json 的 main 指向本文件 ——
+// 任何 `require('lumapost')` 都会立刻触发一次完整抓取并向 AI 狂发请求。
+if (require.main === module) {
+  main().catch(err => {
+    console.error('❌', err.message);
+    process.exit(1);
+  });
+}
+
+module.exports = {
+  main: main,
+  safeJSON: safeJSON,
+  repairJSON: jsonRepair.repairJSON,
+  PERIOD_CONFIG: PERIOD_CONFIG,
+  ALL_SECTIONS: ALL_SECTIONS,
+  SECTION_KEYWORDS: SECTION_KEYWORDS,
+  filterBoardsForSection: filterBoardsForSection,
+  fetchAllBoards: fetchAllBoards,
+  fetchExtraNewsContext: fetchExtraNewsContext,
+  fetchWeather: fetchWeather,
+  fetchStockData: fetchStockData,
+  getQuote: getQuote,
+  safeJSON: safeJSON,
+  groupTokenBudget: groupTokenBudget,
+  pkgVersion: pkgVersion,
+  acquireLock: acquireLock,
+  releaseLock: releaseLock,
+};

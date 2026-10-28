@@ -1,3 +1,10 @@
+> ⚠️ **v10.6.0 说明**：本文原为 GitHub Actions 的 Secrets 配置指南，内容仍然适用。
+> 但请注意：**Web UI 已移除**，本地配置改用命令行：
+> `node scripts/cli.js set ai.apiKey sk-xxx`
+> 变量名与本文一致（`AI_API_KEY` / `MAIL_USER` / `MAIL_PASS` 等）。
+
+---
+
 # LumaPost · GitHub Secrets 完整配置指南
 
 > 一份配置，让邮件自动发送 + AI智能摘要
