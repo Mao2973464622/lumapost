@@ -69,7 +69,7 @@ const ensure = (key, def) => {
   if (cur === undefined || cur === null) need.push(key);
 };
 ['email', 'enhance', 'schedule', 'delivery', 'sections', 'sources', 'search',
- 'weather', 'app.makeUpWindowMin'].forEach(k => ensure(k));
+ 'weather', 'sources.enhance'].forEach(k => ensure(k));
 if (need.length) {
   log('需要补全的配置段: ' + need.join(', '));
   if (APPLY) {

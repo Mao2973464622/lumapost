@@ -120,20 +120,32 @@ function getStore() {
   try { return require('./config-store'); } catch (e) { return null; }
 }
 
+/**
+ * 取本次要抓取的版块列表。
+ *
+ * v10.7.0 语义变更（重要）：
+ *   旧逻辑 —— `sections.enabled` 为空数组时回落到「全部版块」，
+ *   导致「默认全部关闭」实际变成了「默认全开」，与用户预期相反。
+ *   新逻辑 —— 空数组就是「一个版块都不抓」，返回 []，
+ *   由调用方给出明确提示并终止。
+ *   优先级：环境变量 ENABLED_SECTIONS > 配置文件 sections.enabled。
+ */
 function getEnabledSections() {
-  // 优先级: 环境变量 > 配置文件 sections.enabled > 全部
   const filter = process.env.ENABLED_SECTIONS;
   if (filter) {
-    const keys = new Set(filter.split(',').map(function (s) { return s.trim(); }));
+    const keys = new Set(filter.split(',').map(function (s) { return s.trim(); }).filter(Boolean));
+    if (!keys.size) return [];
     return ALL_SECTIONS.filter(function (s) { return keys.has(s.key); });
   }
   const store = getStore();
-  const fromFile = store && store.get('sections.enabled');
-  if (Array.isArray(fromFile) && fromFile.length) {
+  const fromFile = store ? store.get('sections.enabled') : undefined;
+  if (Array.isArray(fromFile)) {
+    // 空数组 = 用户显式全部关闭，不再回落到全量
+    if (!fromFile.length) return [];
     const keys = new Set(fromFile);
-    const picked = ALL_SECTIONS.filter(function (s) { return keys.has(s.key); });
-    if (picked.length) return picked;
+    return ALL_SECTIONS.filter(function (s) { return keys.has(s.key); });
   }
+  // 配置项完全缺失（老版本配置文件）时才回落到全量
   return ALL_SECTIONS;
 }
 
@@ -239,7 +251,7 @@ async function fetchAllBoards() {
   try {
     const hot = require('./hotboard');
     const store = getStore();
-    const enh = (store && store.get('enhance')) || {};
+    const enh = (store && store.get('sources.enhance')) || {};   // v10.7.0：enhance 已并入 sources
     const types = Array.isArray(enh.hotTypes) && enh.hotTypes.length ? enh.hotTypes : null;
     const results = await hot.fetchAllHotboards(types, { limit: 6, concurrency: 6 });
     for (const r of results) {
@@ -487,7 +499,7 @@ async function fetchExtraNewsContext() {
   try {
     const hot = require('./hotboard');
     const store0 = getStore();
-    const enhCfg = (store0 && store0.get('enhance')) || {};
+    const enhCfg = (store0 && store0.get('sources.enhance')) || {};   // v10.7.0：enhance 已并入 sources
     if (enhCfg.enableHotboard !== false) {
       console.log('  ⏳ Steam / Epic / 行情 / GitHub Trending...');
       const t0 = Date.now();
@@ -1071,6 +1083,16 @@ async function main() {
 
   // 版块筛选
   const sections = getEnabledSections();
+  // v10.7.0：sections.enabled 为空 = 用户全部关闭，直接终止并给出可操作提示，
+  // 不再静默抓一堆数据却生成 0 个版块。
+  if (!sections.length) {
+    console.error('❌ 没有任何启用的版块（sections.enabled 为空）。');
+    console.error('   抓取已中止。要启用版块，任选其一：');
+    console.error('     · node scripts/cli.js sections:enable        # 启用全部 10 个版块');
+    console.error('     · node scripts/cli.js set sections.enabled ai,hardware,news');
+    releaseLock(lockPath);
+    process.exit(2);
+  }
   if (sections.length < ALL_SECTIONS.length) {
     console.log(`📋 已筛选版块: ${sections.map(s => s.name).join(' / ')}`);
   }

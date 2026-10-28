@@ -1,21 +1,15 @@
 {
   "name": "lumapost",
-  "version": "10.6.0",
-  "description": "LumaPost 光影邮报 — AI 驱动的智能新闻邮件系统。175 个信息源 · 13 个中文热榜 · 10 套邮件主题 · 本地 Web UI 管理后台 · 内容预算与投递安全闸门。",
+  "version": "10.7.0",
+  "description": "LumaPost 光影邮报 — AI 驱动的智能新闻邮件系统。175 个信息源 · 13 个中文热榜 · 10 个阅读分区 · 纯 CLI 驱动，无 Web UI。",
   "main": "scripts/cli.js",
   "scripts": {
-    "ai:config": "node scripts/ai-provider.js --config",
-    "ai:list": "node scripts/ai-provider.js --list",
-    "ai:models": "node scripts/ai-provider.js --models",
-    "ai:test": "node scripts/ai-provider.js --test",
     "all:afternoon": "npm run fetch:afternoon && npm run gen:afternoon && npm run send:afternoon",
     "all:evening": "npm run fetch:evening && npm run gen:evening && npm run send:evening",
     "all:morning": "npm run fetch:morning && npm run gen:morning && npm run send:morning",
     "all:noon": "npm run fetch:noon && npm run gen:noon && npm run send:noon",
-    "config:path": "node -e \"console.log(require('./scripts/config-store').CONFIG_FILE)\"",
     "config:reset": "node -e \"require('./scripts/config-store').reset();console.log('配置已重置')\"",
-    "config:show": "node -e \"console.log(JSON.stringify(require('./scripts/config-store').getAll(),null,2))\"",
-    "doctor": "node -e \"const c=require('./scripts/config-store');const r=c.validate();console.log(JSON.stringify(r,null,2));process.exit(r.valid?0:1)\"",
+    "doctor": "node scripts/cli.js doctor",
     "fetch:afternoon": "node scripts/fetch-news-ai.js --period=afternoon --output=data/afternoon-latest.json",
     "fetch:evening": "node scripts/fetch-news-ai.js --period=evening --output=data/evening-latest.json",
     "fetch:morning": "node scripts/fetch-news-ai.js --period=morning --output=data/morning-latest.json",
@@ -31,8 +25,6 @@
     "send:evening": "node scripts/send-mail.js --period=evening",
     "send:morning": "node scripts/send-mail.js --period=morning",
     "send:noon": "node scripts/send-mail.js --period=noon",
-    "sources:list": "node -e \"const c=require('./scripts/sources-catalog');console.log(c.CATALOG.length+' 个源 / '+Object.keys(c.CATEGORIES).length+' 分类')\"",
-    "sources:test": "node scripts/rss-fetcher.js --catalog",
     "search": "node scripts/web-search.js",
     "hot": "node scripts/hotboard.js",
     "hot:stock": "node scripts/hotboard.js stock",
@@ -42,15 +34,23 @@
     "start": "node scripts/cli.js serve",
     "cli": "node scripts/cli.js",
     "status": "node scripts/cli.js status",
-    "sources": "node scripts/cli.js sources"
+    "sources": "node scripts/cli.js sources",
+    "sections": "node scripts/cli.js sections",
+    "sections:enable": "node scripts/cli.js sections:enable",
+    "sources:enable": "node scripts/cli.js sources:enable",
+    "preview": "node scripts/cli.js preview morning",
+    "test:ai": "node scripts/cli.js test-ai",
+    "test:mail": "node scripts/cli.js test-mail"
   },
   "keywords": [
     "news",
     "email",
-    "automation",
+    "newsletter",
     "ai",
     "llm",
-    "newsletter",
+    "automation",
+    "cli",
+    "rss",
     "digest"
   ],
   "author": "QiXua & Operit AI",
@@ -60,7 +60,7 @@
     "nodemailer": "^7.0.6"
   },
   "engines": {
-    "node": ">=20.0.0"
+    "node": ">=18.0.0"
   },
   "repository": {
     "type": "git",

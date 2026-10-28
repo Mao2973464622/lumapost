@@ -1,115 +1,349 @@
-name: LumaPost Email
+# ═══════════════════════════════════════════════════════════════════════════
+#  LumaPost · 光影邮报 — 云端自动发信工作流
+# ═══════════════════════════════════════════════════════════════════════════
+#
+#  📖 使用说明
+#
+#  1) Fork 本仓库到你的账号
+#
+#  2) 配置 Secrets（必填）
+#     路径：仓库 → Settings → Secrets and variables → Actions → Secrets
+#     ┌──────────────┬────────────────────────────────────────────┐
+#     │ AI_API_KEY   │ AI 服务商密钥（如 DeepSeek 的 sk-xxx）      │
+#     │ MAIL_USER    │ 发件邮箱（如 you@qq.com）                   │
+#     │ MAIL_PASS    │ SMTP 授权码（不是登录密码！）               │
+#     └──────────────┴────────────────────────────────────────────┘
+#
+#  3) 配置 Variables（强烈建议，否则默认值可能不适用）
+#     路径：仓库 → Settings → Secrets and variables → Actions → Variables
+#     ┌────────────────────┬──────────────┬─────────────────────────────┐
+#     │ 名称               │ 示例          │ 说明                        │
+#     ├────────────────────┼──────────────┼─────────────────────────────┤
+#     │ AI_PROVIDER        │ deepseek     │ AI 服务商                   │
+#     │ AI_MODEL           │ deepseek-chat│ 模型名（留空用默认）         │
+#     │ AI_MAX_TOKENS      │ 8000         │ 推理模型务必 ≥8000          │
+#     │ MAIL_PROVIDER      │ qq           │ 邮件服务商                   │
+#     │ MAIL_TO            │ me@qq.com    │ 收件人（留空发给自己）        │
+#     │ ENABLED_SECTIONS   │ ai,hardware  │ 抓哪些版块（见下方说明）      │
+#     │ ENABLE_HOTBOARD    │ true         │ 是否抓中文热榜               │
+#     │ ENABLE_SCHEDULE    │ false        │ 是否启用 cron 定时（默认关）  │
+#     └────────────────────┴──────────────┴─────────────────────────────┘
+#
+#     ⚠️ ENABLED_SECTIONS 可选值（逗号分隔）：
+#        ai, hardware, github, news, games, finance, auto, internet, life, space
+#        留空 = 使用仓库里 config/app.json 的配置
+#        全部 10 个 = ai,hardware,github,news,games,finance,auto,internet,life,space
+#
+#  4) 首次测试
+#     Actions → LumaPost → Run workflow → 选时段 → Run
+#     建议先勾选 preview=true 只生成不发信，确认无误后再正式跑
+#
+#  ⚠️ 关于定时
+#     本工作流默认【不启用自动定时】，需手动触发。
+#     原因：Actions 的 cron 使用 UTC，且免费额度有限；
+#     盲目开启容易在你不希望的时段发信或耗尽额度。
+#     确认要用时，把下面 schedule 段的注释去掉，
+#     并把 ENABLE_SCHEDULE 设为 true。
+#
+# ═══════════════════════════════════════════════════════════════════════════
+
+name: LumaPost
 
 on:
+  # ── 手动触发（默认入口）───────────────────────────────────────────────
   workflow_dispatch:
     inputs:
       period:
-        description: '时段（auto=自动判断）'
-        required: false
+        description: '时段（auto = 按当前时间自动判断）'
+        required: true
         type: choice
         default: 'auto'
-        options: [auto, morning, noon, afternoon, evening]
+        options:
+          - auto
+          - morning
+          - noon
+          - afternoon
+          - evening
       preview:
-        description: '仅生成预览（不发邮件）'
+        description: '仅生成预览，不发送邮件'
+        required: false
+        type: boolean
+        default: false
+      allow_degraded:
+        description: '允许发送降级内容（无 AI 解读的纯热榜）'
+        required: false
         type: boolean
         default: false
 
-  # 中国时间 → UTC
-  # 06:00 = 22:00 UTC / 12:00 = 04:00 UTC
-  # 17:30 = 09:30 UTC / 21:00 = 13:00 UTC
-  schedule:
-    - cron: '0 22 * * *'     # 中国 06:00 早报
-    - cron: '0 4 * * *'      # 中国 12:00 午报
-    - cron: '30 9 * * *'     # 中国 17:30 傍晚
-    - cron: '0 13 * * *'     # 中国 21:00 夜间
+  # ── 定时触发（默认关闭，需要时取消注释）───────────────────────────────
+  # 时间均为 UTC，中国时间需减 8 小时
+  # 例：中国 07:00 → UTC 23:00（前一天）
+  # schedule:
+  #   - cron: '0 23 * * *'    # 中国 07:00 早报
+  #   - cron: '0 13 * * *'    # 中国 21:00 晚报
+  #
+  # 注意：schedule 触发时 inputs.* 全为 null / false，
+  # 下方 steps 已用 `|| '默认值'` 兜底，无需额外处理。
 
+# 最小权限原则
 permissions:
   contents: read
 
+# 防止定时任务堆积（同一时间只跑一个）
+concurrency:
+  group: lumapost-${{ github.ref }}
+  cancel-in-progress: false
+
 env:
-  AI_PROVIDER: ${{ vars.AI_PROVIDER || 'deepseek' }}
-  AI_MODEL: ${{ vars.AI_MODEL || '' }}
-  AI_TEMP: ${{ vars.AI_TEMP || '0.7' }}
-  AI_MAX_TOKENS: ${{ vars.AI_MAX_TOKENS || '8000' }}
-  MAIL_PROVIDER: ${{ vars.MAIL_PROVIDER || 'qq' }}
-  WEATHER_LAT: ${{ vars.WEATHER_LAT || '28.20' }}
-  WEATHER_LON: ${{ vars.WEATHER_LON || '112.97' }}
+  TZ: Asia/Shanghai
+  NODE_VERSION: '20'
 
 jobs:
   send:
-    name: 📮 LumaPost
+    name: 抓取 · 渲染 · 发送
     runs-on: ubuntu-latest
+    timeout-minutes: 40
+
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      # ────────────────────────────────────────────────────────────────
+      # 1. 检出代码
+      # ────────────────────────────────────────────────────────────────
+      - name: 📥 检出代码
+        uses: actions/checkout@v4
+
+      # ────────────────────────────────────────────────────────────────
+      # 2. 准备 Node 环境
+      # ────────────────────────────────────────────────────────────────
+      - name: ⚙️ 准备 Node.js ${{ env.NODE_VERSION }}
+        uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: ${{ env.NODE_VERSION }}
           cache: 'npm'
           cache-dependency-path: package-lock.json
-      - run: npm install --no-audit --no-fund
-      - name: ✅ 回归测试（拦截渲染/预算/JSON 回归）
-        run: npm test
-      - name: ✅ 配置体检
-        run: npm run doctor || true
 
-      - name: ⏰ 时段（转中国时间）
+      - name: 📦 安装依赖
+        run: |
+          if [ -f package-lock.json ]; then
+            npm ci --no-audit --no-fund
+          else
+            npm install --no-audit --no-fund
+          fi
+
+      # ────────────────────────────────────────────────────────────────
+      # 3. 回归测试（拦截渲染 / 预算 / JSON 处理的行为回归）
+      #    这一步不联网、不调 AI，失败说明代码本身有问题
+      # ────────────────────────────────────────────────────────────────
+      - name: ✅ 回归测试
+        run: npm test
+
+      # ────────────────────────────────────────────────────────────────
+      # 4. 解析本次时段
+      #    workflow_dispatch 用用户选择；schedule 触发时按当前时间推断
+      # ────────────────────────────────────────────────────────────────
+      - name: 🕐 解析时段
         id: period
         run: |
-          P="${{ inputs.period }}"
-          if [ -z "$P" ] || [ "$P" = "auto" ]; then
+          set -eu
+          P="${{ github.event.inputs.period || 'auto' }}"
+          if [ "$P" = "auto" ] || [ -z "$P" ]; then
+            # 用 UTC 小时 +8 换算成中国时间，再按时段切分
             CST_H=$(( ($(date -u +%H) + 8) % 24 ))
-            case "$CST_H" in 6|7|8|9|10|11) P=morning;; 12|13|14|15|16) P=noon;; 17|18|19|20) P=afternoon;; *) P=evening;; esac
+            case "$CST_H" in
+              5|6|7|8|9|10|11)      P=morning ;;
+              12|13|14|15|16)       P=noon ;;
+              17|18|19|20)          P=afternoon ;;
+              *)                    P=evening ;;
+            esac
           fi
-          echo "period=$P" >> $GITHUB_OUTPUT
-          echo "🌅 $P"
+          echo "period=$P" >> "$GITHUB_OUTPUT"
+          echo "📅 本次时段：$P（中国时间 $(TZ=Asia/Shanghai date '+%Y-%m-%d %H:%M')）"
 
-      - name: 🧠 AI 新闻（v4.0·22源·10版块）
-        id: ai
+      # ────────────────────────────────────────────────────────────────
+      # 5. 用 Secrets / Variables 生成运行时配置
+      #    优先级：GitHub Variables > 仓库 config/app.json > 代码默认值
+      #
+      #    这里只写「用户显式提供」的项，其余交给 config-store 的默认值，
+      #    避免把整份配置覆盖成空。
+      # ────────────────────────────────────────────────────────────────
+      - name: 🔧 生成运行时配置
+        env:
+          AI_PROVIDER: ${{ vars.AI_PROVIDER || 'deepseek' }}
+          AI_MODEL: ${{ vars.AI_MODEL || '' }}
+          AI_MAX_TOKENS: ${{ vars.AI_MAX_TOKENS || '8000' }}
+          MAIL_PROVIDER: ${{ vars.MAIL_PROVIDER || 'qq' }}
+          MAIL_TO: ${{ vars.MAIL_TO || '' }}
+          ENABLED_SECTIONS: ${{ vars.ENABLED_SECTIONS || '' }}
+          ENABLE_HOTBOARD: ${{ vars.ENABLE_HOTBOARD || 'true' }}
+        run: |
+          set -eu
+          mkdir -p config data
+
+          # 用 Node 写配置，避免 shell 拼接 JSON 出错
+          node -e '
+            const fs = require("fs");
+            const path = "config/app.json";
+            let c = {};
+            try { c = JSON.parse(fs.readFileSync(path, "utf8")); } catch (e) { c = {}; }
+
+            const env = process.env;
+
+            // AI 段
+            c.ai = c.ai || {};
+            if (env.AI_PROVIDER) c.ai.provider = env.AI_PROVIDER;
+            if (env.AI_MODEL) c.ai.model = env.AI_MODEL;
+            if (env.AI_MAX_TOKENS) c.ai.maxTokens = Number(env.AI_MAX_TOKENS);
+
+            // 邮件段
+            c.mail = c.mail || {};
+            if (env.MAIL_PROVIDER) c.mail.provider = env.MAIL_PROVIDER;
+            if (env.MAIL_TO) c.mail.to = env.MAIL_TO;
+
+            // 版块：显式给了才覆盖，否则保留仓库里的配置
+            const secRaw = String(env.ENABLED_SECTIONS || "").trim();
+            if (secRaw) {
+              c.sections = c.sections || {};
+              c.sections.enabled = secRaw.split(",").map(s => s.trim()).filter(Boolean);
+            } else if (!c.sections || !Array.isArray(c.sections.enabled) || !c.sections.enabled.length) {
+              // 仓库配置里是空的（默认全关）→ 给 Actions 一个可跑的默认值
+              c.sections = { enabled: ["ai", "hardware", "news", "finance"] };
+              console.log("ℹ️ ENABLED_SECTIONS 未设置且仓库配置为空，回落到 4 个默认版块");
+            }
+
+            // 信息源：至少有热榜，否则抓不到任何内容
+            c.sources = c.sources || {};
+            c.sources.enhance = c.sources.enhance || {};
+            const hotOn = String(env.ENABLE_HOTBOARD || "true") === "true";
+            if (hotOn) {
+              c.sources.enhance.enableHotboard = true;
+              c.sources.enhance.stocks = true;
+              console.log("ℹ️ 已启用中文热榜 + A股行情");
+            }
+
+            // Actions 里不需要内置调度器（由 cron 驱动），关掉避免双重触发
+            c.app = c.app || {};
+            c.app.autoSchedule = false;
+
+            fs.writeFileSync(path, JSON.stringify(c, null, 2) + "\n", "utf8");
+            console.log("✅ 配置已生成");
+            console.log("   版块:", (c.sections.enabled || []).join(", "));
+            console.log("   热榜:", c.sources.enhance.enableHotboard ? "开" : "关");
+          '
+
+          # 打印体检结果（不阻断流程，缺项会在后续步骤报出明确错误）
+          echo "────────── 配置体检 ──────────"
+          node scripts/cli.js doctor || true
+          echo "──────────────────────────────"
+
+      # ────────────────────────────────────────────────────────────────
+      # 6. 抓取 + AI 编排
+      #    这是最耗时的一步（3–20 分钟），失败会继续往下走，
+      #    以便用降级脚本兜底（GitHub 上不希望因为 AI 抖动就彻底没邮件）
+      # ────────────────────────────────────────────────────────────────
+      - name: 🧠 抓取并编排
+        id: fetch
         continue-on-error: true
         env:
-          AI_PROVIDER: ${{ env.AI_PROVIDER }}
+          AI_PROVIDER: ${{ vars.AI_PROVIDER || 'deepseek' }}
           AI_API_KEY: ${{ secrets.AI_API_KEY }}
-          AI_MODEL: ${{ env.AI_MODEL }}
-          AI_TEMP: ${{ env.AI_TEMP }}
-          AI_MAX_TOKENS: ${{ env.AI_MAX_TOKENS }}
-          AI_BASE_URL: ${{ secrets.AI_BASE_URL }}
-          WEATHER_LAT: ${{ env.WEATHER_LAT }}
-          WEATHER_LON: ${{ env.WEATHER_LON }}
+          AI_MODEL: ${{ vars.AI_MODEL || '' }}
+          AI_BASE_URL: ${{ secrets.AI_BASE_URL || '' }}
+          AI_MAX_TOKENS: ${{ vars.AI_MAX_TOKENS || '8000' }}
+          AI_TEMP: ${{ vars.AI_TEMP || '0.6' }}
+          AI_GROUP_SIZE: ${{ vars.AI_GROUP_SIZE || '2' }}
+          AI_CONCURRENCY: ${{ vars.AI_CONCURRENCY || '1' }}
+          ENABLED_SECTIONS: ${{ vars.ENABLED_SECTIONS || '' }}
         run: |
-          node scripts/fetch-news-ai.js \
-            --period=${{ steps.period.outputs.period }} \
-            --output=data/${{ steps.period.outputs.period }}-latest.json
+          node scripts/cli.js fetch "${{ steps.period.outputs.period }}"
 
-      - name: 📰 热榜降级
-        if: steps.ai.outcome != 'success'
-        run: node scripts/fetch-cn-news.js --output=data/${{ steps.period.outputs.period }}-latest.json
-
-      - name: 🎨 HTML 邮件
+      # ────────────────────────────────────────────────────────────────
+      # 7. 抓取失败 → 用纯热榜降级脚本兜底
+      #    保证「至少发出一封有内容的邮件」，而不是彻底空手
+      # ────────────────────────────────────────────────────────────────
+      - name: 📰 降级兜底（仅当 AI 抓取失败）
+        if: steps.fetch.outcome != 'success'
         run: |
-          node scripts/gen-html.js \
-            --data-file=data/${{ steps.period.outputs.period }}-latest.json \
-            --output=data/${{ steps.period.outputs.period }}-email.html
+          echo "⚠️ AI 抓取未成功，改用纯热榜降级数据"
+          node scripts/fetch-cn-news.js \
+            --output="data/${{ steps.period.outputs.period }}-latest.json"
 
-      - name: 📮 发送
-        if: ${{ inputs.preview != 'true' }}
+      # ────────────────────────────────────────────────────────────────
+      # 8. 渲染 HTML + 纯文本
+      # ────────────────────────────────────────────────────────────────
+      - name: 🎨 渲染邮件
+        run: |
+          node scripts/cli.js gen "${{ steps.period.outputs.period }}"
+
+      # ────────────────────────────────────────────────────────────────
+      # 9. 发送（preview=true 时跳过）
+      # ────────────────────────────────────────────────────────────────
+      - name: 📮 发送邮件
+        if: ${{ github.event.inputs.preview != 'true' }}
         env:
-          MAIL_PROVIDER: ${{ env.MAIL_PROVIDER }}
-          MAIL_USER: ${{ secrets.MAIL_USER || secrets.SMTP_USER }}
-          MAIL_PASS: ${{ secrets.MAIL_PASS || secrets.SMTP_PASS }}
-          MAIL_FROM: ${{ secrets.MAIL_USER || secrets.SMTP_USER }}
-          MAIL_TO: ${{ vars.MAIL_TO || secrets.EMAIL_TO }}
-          MAIL_API_KEY: ${{ secrets.MAIL_API_KEY }}
+          MAIL_PROVIDER: ${{ vars.MAIL_PROVIDER || 'qq' }}
+          MAIL_USER: ${{ secrets.MAIL_USER }}
+          MAIL_PASS: ${{ secrets.MAIL_PASS }}
+          MAIL_TO: ${{ vars.MAIL_TO || '' }}
+          MAIL_FROM: ${{ secrets.MAIL_USER }}
         run: |
-          case "${{ steps.period.outputs.period }}" in
-            morning)   T="早报";; noon) T="午报";; afternoon) T="傍晚速递";; evening) T="夜间总结";; *) T="特刊";;
-          esac
-          # v10.6.0：统一走 send-mail.js，复用其数据新鲜度 / 降级拦截 / 体积守门
-          node scripts/send-mail.js --period=${{ steps.period.outputs.period }}
+          set -eu
+          ARGS="--period=${{ steps.period.outputs.period }}"
+          if [ "${{ github.event.inputs.allow_degraded }}" = "true" ]; then
+            ARGS="$ARGS --allow-degraded"
+          fi
+          node scripts/send-mail.js $ARGS
 
-      - name: 💾 保存
+      - name: 👀 仅预览模式（未发送）
+        if: ${{ github.event.inputs.preview == 'true' }}
+        run: |
+          echo "👀 preview=true：已生成邮件但未发送"
+          ls -lh "data/${{ steps.period.outputs.period }}-email.html" || true
+
+      # ────────────────────────────────────────────────────────────────
+      # 10. 归档产物（无论成功失败都保留，便于排查）
+      # ────────────────────────────────────────────────────────────────
+      - name: 💾 归档数据与邮件
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: lumapost-data-${{ steps.period.outputs.period }}
-          path: data/*.json
+          name: lumapost-${{ steps.period.outputs.period }}-${{ github.run_number }}
+          path: |
+            data/*-latest.json
+            data/*-email.html
+            data/*-email.txt
+            data/history.json
           retention-days: 7
+          if-no-files-found: warn
+
+      # ────────────────────────────────────────────────────────────────
+      # 11. 结果摘要（显示在 Actions 运行页面）
+      # ────────────────────────────────────────────────────────────────
+      - name: 📊 运行摘要
+        if: always()
+        run: |
+          P="${{ steps.period.outputs.period }}"
+          F="data/${P}-latest.json"
+          {
+            echo "## LumaPost 运行结果"
+            echo ""
+            echo "| 项目 | 值 |"
+            echo "|---|---|"
+            echo "| 时段 | \`$P\` |"
+            echo "| 模式 | ${{ github.event.inputs.preview == 'true' && '仅预览' || '已发送' }} |"
+            echo "| AI 抓取 | ${{ steps.fetch.outcome == 'success' && '✅ 成功' || '⚠️ 失败（已降级兜底）' }} |"
+            if [ -f "$F" ]; then
+              node -e '
+                const d = require("./'"$F"'");
+                const m = d.meta || {};
+                console.log("| 质量 | " + (m.quality || "-") + " |");
+                console.log("| 条数 | " + (m.itemCount || 0) + " |");
+                console.log("| AI 解读 | " + (m.commentaryCount || 0) + " 条（覆盖 " +
+                  Math.round((m.commentaryCoverage || 0) * 100) + "%） |");
+                console.log("| AI 模式 | " + (m.aiMode === false ? "降级" : "正常") + " |");
+                if (m.degradeReason) console.log("| 降级原因 | " + String(m.degradeReason).slice(0, 100) + " |");
+              ' || true
+            else
+              echo "| 数据 | ❌ 未生成 |"
+            fi
+            echo ""
+            echo "> 详细数据见本次运行的 Artifacts"
+          } >> "$GITHUB_STEP_SUMMARY"

@@ -195,9 +195,10 @@ function tick() {
 
   const d = new Date();
   const hhmm = nowHHMM(d);
-  // v10.5.0：补跑窗口。旧实现要求 hhmm 与目标完全相等，
-  // 服务在整点那一分钟重启就会整天错过该时段。改为在窗口内（默认 5 分钟）均可触发。
-  const graceMin = Math.max(1, Math.min(59, Number(cfg.app.makeUpWindowMin) || 5));
+  // v10.7.0：移除可配置的「补跑窗口」。改为固定 1 分钟容差：
+  // 30 秒轮询本身保证不会错过整分，1 分钟容差足以覆盖 tick 抖动，
+  // 又不会因为服务晚启动 5 分钟就补发一封「过时」的早报。
+  const GRACE_MIN = 1;
   const nowMin = d.getHours() * 60 + d.getMinutes();
 
   for (const slot of SLOTS) {
@@ -207,7 +208,7 @@ function tick() {
     const targetMin = Number(tp[0]) * 60 + Number(tp[1]);
     if (Number.isNaN(targetMin)) continue;
     const diff = nowMin - targetMin;
-    if (diff < 0 || diff >= graceMin) continue;
+    if (diff < 0 || diff >= GRACE_MIN) continue;
 
     const stamp = fireKey(d, slot, target);
     if (state.lastFired[stamp]) continue;
@@ -233,10 +234,7 @@ function start() {
   loadState();
   state.timer = setInterval(tick, 30000);
   intervalGuard();
-  log('调度器已启动（30 秒轮询，补跑窗口 ' + (function () {
-    try { return Math.max(1, Number(store && store.get('app.makeUpWindowMin')) || 5) + ' 分钟'; }
-    catch (e) { return 5; }
-  })() + '）');
+  log('调度器已启动（30 秒轮询，容差 1 分钟）');
 }
 
 function intervalGuard() {

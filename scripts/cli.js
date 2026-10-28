@@ -12,6 +12,9 @@
  *   node scripts/cli.js set email.itemsTotal 24
  *   node scripts/cli.js doctor                配置体检
  *   node scripts/cli.js sources               信息源启用情况
+ *   node scripts/cli.js sources:enable        启用全部信息源
+ *   node scripts/cli.js sections              阅读版块启用情况
+ *   node scripts/cli.js sections:enable       启用全部阅读版块
  *
  * ── 运行 ──
  *   node scripts/cli.js run morning           抓取 → 生成 → 发送
@@ -40,6 +43,12 @@ const args = argv.slice(1);
 const has = (f) => args.indexOf(f) >= 0;
 
 function store() { return require('./config-store'); }
+
+/** v10.7.0：这些配置项是数组，`set` 时按逗号切分 */
+const ARRAY_KEYS = [
+  'sections.enabled',
+  'sources.enhance.hotTypes',
+];
 
 function out(s) { process.stdout.write(String(s) + '\n'); }
 function line() { out('─'.repeat(58)); }
@@ -104,17 +113,28 @@ function cmdConfig() {
 function cmdSet() {
   const key = args[0];
   const raw = args.slice(1).join(' ');
-  if (!key || raw === '') {
+  // v10.7.0：允许把数组型配置显式设为空（args 长度为 1，raw 为空串），
+  // 因此用 arguments 长度判断“有没有给值”，而不是用 raw === ''
+  const hasValue = args.length > 1;
+  if (!key || !hasValue) {
     out('用法: node scripts/cli.js set <点路径> <值>');
     out('例:   node scripts/cli.js set email.itemsTotal 24');
     out('      node scripts/cli.js set ai.model deepseek-chat');
     out('      node scripts/cli.js set app.autoSchedule true');
+    out('      node scripts/cli.js set sections.enabled ai,hardware,news');
+    out('      node scripts/cli.js set sections.enabled ""        # 清空（全部关闭）');
     process.exit(1);
   }
   let val = raw;
   if (raw === 'true') val = true;
   else if (raw === 'false') val = false;
   else if (/^-?\d+(\.\d+)?$/.test(raw)) val = Number(raw);
+  // v10.7.0：数组型配置支持逗号分隔写法
+  //   node scripts/cli.js set sections.enabled ai,hardware,news
+  //   node scripts/cli.js set sections.enabled ""        → 空数组（全部关闭）
+  else if (/\[\]$/.test(key) || ARRAY_KEYS.indexOf(key) >= 0) {
+    val = raw.split(',').map(function (s) { return s.trim(); }).filter(Boolean);
+  }
 
   const c = store();
   const ok = c.set(key, val);
@@ -163,6 +183,36 @@ function cmdSourcesEnable() {
   const rss = ((c.get('sources') || {}).rss || []).map(s => Object.assign({}, s, { enabled: true }));
   const ok = c.update({ sources: { enableRss: true, useWebFallback: true, rss } });
   out(ok ? '✅ 已启用全部 ' + rss.length + ' 个信息源' : '❌ 失败');
+}
+
+function cmdSections() {
+  const cfg = store().getAll();
+  const all = require('./fetch-news-ai').ALL_SECTIONS;
+  const on = (cfg.sections || {}).enabled || [];
+  const onSet = new Set(on);
+
+  line();
+  out('  阅读版块');
+  line();
+  out('  已启用        ' + on.length + ' / ' + all.length +
+    (on.length === 0 ? '  ⚠ 全部关闭（抓取会中止）' : (on.length === all.length ? '  ✅ 全部开启' : '')));
+  out('');
+  all.forEach(function (s, i) {
+    out('  ' + (onSet.has(s.key) ? '✅' : '⬜') + ' ' + String(i + 1).padStart(2) + '. ' +
+      String(s.key).padEnd(11) + s.name);
+  });
+  line();
+  out('  启用全部: node scripts/cli.js sections:enable');
+  out('  启用部分: node scripts/cli.js set sections.enabled ai,hardware,news');
+  out('  关闭全部: node scripts/cli.js set sections.enabled ""');
+  line();
+}
+
+function cmdSectionsEnable() {
+  // 启用全部版块
+  const all = require('./fetch-news-ai').ALL_SECTIONS.map(function (s) { return s.key; });
+  const ok = store().set('sections.enabled', all);
+  out(ok ? '✅ 已启用全部 ' + all.length + ' 个版块: ' + all.join(', ') : '❌ 失败');
 }
 
 /* ─────────── run ─────────── */
@@ -293,6 +343,8 @@ const CMDS = {
   doctor: cmdDoctor,
   sources: cmdSources,
   'sources:enable': cmdSourcesEnable,
+  sections: cmdSections,
+  'sections:enable': cmdSectionsEnable,
   run: cmdRun,
   fetch: cmdFetch,
   gen: cmdGen,
