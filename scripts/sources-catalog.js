@@ -1,9 +1,10 @@
 #!/usr/bin/env node
 /**
- * sources-catalog.js — 内置信息源库（v5.2）
+ * sources-catalog.js — 内置信息源库（v5.3）
  *
- * 175 个信息源，覆盖 17 个领域。
+ * 163 个信息源，覆盖 17 个领域。
  * 全部逐个 HTTP 实测（解析出真实条目才算通过），不稳定源已剔除。
+ * v10.7.1：剔除 12 个不稳定源（超时/403/404/406），175 → 163 条。
  * 用户可在 Web UI「信息源」页增删改，改动写入 config/app.json。
  */
 
@@ -44,16 +45,13 @@ const CATALOG = [
   { name: "Jay Alammar", url: "https://jalammar.github.io/feed.xml", category: "ai", lang: "en" },
   { name: "Lil Log", url: "https://lilianweng.github.io/index.xml", category: "ai", lang: "en" },
   { name: "MIT Tech Review", url: "https://www.technologyreview.com/feed/", category: "ai", lang: "en" },
-  { name: "Microsoft Research", url: "https://www.microsoft.com/en-us/research/feed/", category: "ai", lang: "en" },
   { name: "OpenAI Blog", url: "https://openai.com/blog/rss.xml", category: "ai", lang: "en" },
   { name: "OpenAI News", url: "https://openai.com/news/rss.xml", category: "ai", lang: "en" },
-  { name: "Sebastian Raschka", url: "https://sebastianraschka.com/rss_feed.xml", category: "ai", lang: "en" },
   { name: "Simon Willison", url: "https://simonwillison.net/atom/everything/", category: "ai", lang: "en" },
   { name: "Synced Review", url: "https://syncedreview.com/feed/", category: "ai", lang: "en" },
   { name: "The Gradient", url: "https://thegradient.pub/rss/", category: "ai", lang: "en" },
   { name: "Ars Technica Cars", url: "https://feeds.arstechnica.com/arstechnica/cars", category: "auto", lang: "en" },
   { name: "Car and Driver", url: "https://www.caranddriver.com/rss/all.xml", category: "auto", lang: "en" },
-  { name: "CleanTechnica", url: "https://cleantechnica.com/feed/", category: "auto", lang: "en" },
   { name: "Electrek", url: "https://electrek.co/feed/", category: "auto", lang: "en" },
   { name: "InsideEVs", url: "https://insideevs.com/rss/news/all/", category: "auto", lang: "en" },
   { name: "InsideEVs", url: "https://insideevs.com/rss/articles/all/", category: "auto", lang: "en" },
@@ -68,7 +66,6 @@ const CATALOG = [
   { name: "Hollywood Reporter", url: "https://www.hollywoodreporter.com/feed/", category: "entertainment", lang: "en" },
   { name: "IndieWire", url: "https://www.indiewire.com/feed/", category: "entertainment", lang: "en" },
   { name: "NME", url: "https://www.nme.com/feed", category: "entertainment", lang: "en" },
-  { name: "Pitchfork", url: "https://pitchfork.com/feed/feed-news/rss", category: "entertainment", lang: "en" },
   { name: "Rolling Stone", url: "https://www.rollingstone.com/feed/", category: "entertainment", lang: "en" },
   { name: "SlashFilm", url: "https://www.slashfilm.com/feed/", category: "entertainment", lang: "en" },
   { name: "Stereogum", url: "https://www.stereogum.com/feed/", category: "entertainment", lang: "en" },
@@ -94,13 +91,11 @@ const CATALOG = [
   { name: "TouchArcade", url: "https://toucharcade.com/feed/", category: "games", lang: "en" },
   { name: "VG247", url: "https://www.vg247.com/feed", category: "games", lang: "en" },
   { name: "A List Apart", url: "https://alistapart.com/main/feed/", category: "github", lang: "en" },
-  { name: "AWS Blog", url: "https://aws.amazon.com/blogs/aws/feed/", category: "github", lang: "en" },
   { name: "CSS-Tricks", url: "https://css-tricks.com/feed/", category: "github", lang: "en" },
   { name: "Cloudflare Blog", url: "https://blog.cloudflare.com/rss/", category: "github", lang: "en" },
   { name: "Dev.to", url: "https://dev.to/feed", category: "github", lang: "en" },
   { name: "Frontend Focus", url: "https://frontendfoc.us/rss", category: "github", lang: "en" },
   { name: "GitHub Blog", url: "https://github.blog/feed/", category: "github", lang: "en" },
-  { name: "Hacker News", url: "https://hnrss.org/frontpage", category: "github", lang: "en" },
   { name: "Hacker Noon", url: "https://hackernoon.com/feed", category: "github", lang: "en" },
   { name: "JavaScript Weekly", url: "https://javascriptweekly.com/rss/", category: "github", lang: "en" },
   { name: "Kubernetes Blog", url: "https://kubernetes.io/feed.xml", category: "github", lang: "en" },
@@ -142,13 +137,11 @@ const CATALOG = [
   { name: "Atlas Obscura", url: "https://www.atlasobscura.com/feeds/latest", category: "life", lang: "en" },
   { name: "Bon Appetit", url: "https://www.bonappetit.com/feed/rss", category: "life", lang: "en" },
   { name: "Brain Pickings", url: "https://www.themarginalian.org/feed/", category: "life", lang: "en" },
-  { name: "Condé Nast Traveler", url: "https://www.cntraveler.com/feed/rss", category: "life", lang: "en" },
   { name: "Eater", url: "https://www.eater.com/rss/index.xml", category: "life", lang: "en" },
   { name: "Lifehacker", url: "https://lifehacker.com/rss", category: "life", lang: "en" },
   { name: "Lifehacker US", url: "https://lifehacker.com/feed/rss", category: "life", lang: "en" },
   { name: "Nautilus", url: "https://nautil.us/feed/", category: "life", lang: "en" },
   { name: "CDC News", url: "https://tools.cdc.gov/api/v2/resources/media/316422.rss", category: "medical", lang: "en" },
-  { name: "FDA News", url: "https://www.fda.gov/about-fda/contact-fda/stay-informed/rss-feeds/press-releases/rss.xml", category: "medical", lang: "en" },
   { name: "MedPage Today", url: "https://www.medpagetoday.com/rss/headlines.xml", category: "medical", lang: "en" },
   { name: "NEJM", url: "https://www.nejm.org/action/showFeed?type=etoc&feed=rss&jc=nejm", category: "medical", lang: "en" },
   { name: "Nature Medicine", url: "https://www.nature.com/nm.rss", category: "medical", lang: "en" },
@@ -159,7 +152,6 @@ const CATALOG = [
   { name: "C4ISRNET", url: "https://www.c4isrnet.com/arc/outboundfeeds/rss/", category: "military", lang: "en" },
   { name: "Defense News", url: "https://www.defensenews.com/arc/outboundfeeds/rss/", category: "military", lang: "en" },
   { name: "Defense One", url: "https://www.defenseone.com/rss/all/", category: "military", lang: "en" },
-  { name: "Defense World", url: "https://www.defenseworld.net/rss", category: "military", lang: "en" },
   { name: "Marine Corps Times", url: "https://www.marinecorpstimes.com/arc/outboundfeeds/rss/", category: "military", lang: "en" },
   { name: "Military Times", url: "https://www.militarytimes.com/arc/outboundfeeds/rss/", category: "military", lang: "en" },
   { name: "Navy Times", url: "https://www.navytimes.com/arc/outboundfeeds/rss/", category: "military", lang: "en" },
@@ -171,7 +163,6 @@ const CATALOG = [
   { name: "ESA", url: "https://www.esa.int/rssfeed/Our_Activities/Space_News", category: "space", lang: "en" },
   { name: "Live Science", url: "https://www.livescience.com/feeds/all", category: "space", lang: "en" },
   { name: "NASA", url: "https://www.nasa.gov/rss/dyn/breaking_news.rss", category: "space", lang: "en" },
-  { name: "NASA JPL", url: "https://www.jpl.nasa.gov/feeds/news", category: "space", lang: "en" },
   { name: "Nature", url: "https://www.nature.com/nature.rss", category: "space", lang: "en" },
   { name: "Phys.org", url: "https://phys.org/rss-feed/", category: "space", lang: "en" },
   { name: "Physics World", url: "https://physicsworld.com/feed/", category: "space", lang: "en" },
@@ -180,8 +171,6 @@ const CATALOG = [
   { name: "Science Daily", url: "https://www.sciencedaily.com/rss/all.xml", category: "space", lang: "en" },
   { name: "Space.com", url: "https://www.space.com/feeds/all", category: "space", lang: "en" },
   { name: "CBS Sports", url: "https://www.cbssports.com/rss/headlines/", category: "sports", lang: "en" },
-  { name: "ESPN", url: "https://www.espn.com/espn/rss/news", category: "sports", lang: "en" },
-  { name: "F1 Official", url: "https://www.formula1.com/en/latest/all.xml", category: "sports", lang: "en" },
   { name: "FourFourTwo", url: "https://www.fourfourtwo.com/feeds/all", category: "sports", lang: "en" },
 ];
 

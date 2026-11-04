@@ -8,7 +8,7 @@
 
 [![Node](https://img.shields.io/badge/node-%E2%89%A518-brightgreen?style=flat-square)](https://nodejs.org)
 [![License](https://img.shields.io/badge/license-MIT-blue?style=flat-square)](LICENSE)
-[![Version](https://img.shields.io/badge/version-10.7.0-orange?style=flat-square)](#版本历史)
+[![Version](https://img.shields.io/badge/version-10.7.1-orange?style=flat-square)](#版本历史)
 [![Tests](https://img.shields.io/badge/tests-26%20passed-brightgreen?style=flat-square)](#测试)
 [![No Web UI](https://img.shields.io/badge/Web%20UI-removed-lightgrey?style=flat-square)](#设计取舍)
 
@@ -562,10 +562,10 @@ lumapost/
 ---
 
 ## 版本历史
-
 | 版本 | 主要变更 |
 |---|---|
-| **10.7.0** | 主题精简为 1 套 · 版块/源/定时默认全关 · `enhance` 并入 `sources` · 移除补跑窗口 · 新增 `sections` 命令 · 文档四件套 |
+| **10.7.1** | 剔除 12 个不稳定信息源（超时/403/404/406），源库 175 → 163 条，仅保留实测可达源 |
+| 10.7.0 | 主题精简为 1 套 · 版块/源/定时默认全关 · `enhance` 并入 `sources` · 移除补跑窗口 · 新增 `sections` 命令 · 文档四件套 |
 | 10.6.0 | 移除 Web UI 改纯 CLI · 分区导航重做 · 预算公平分配 · 卡片体积优化 4.5 倍 · `json-repair.js` |
 | 10.5.x | 修复 AI 解读从未渲染 · 配置脱敏 · 发送四道闸门 · 内容简介替换元数据噪声 |
 | 10.4.x | 补齐 `send-mail.js` · 修复定时发送从未成功 |

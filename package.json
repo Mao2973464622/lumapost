@@ -1,7 +1,7 @@
 {
   "name": "lumapost",
-  "version": "10.7.0",
-  "description": "LumaPost 光影邮报 — AI 驱动的智能新闻邮件系统。175 个信息源 · 13 个中文热榜 · 10 个阅读分区 · 纯 CLI 驱动，无 Web UI。",
+  "version": "10.7.1",
+  "description": "LumaPost 光影邮报 — AI 驱动的智能新闻邮件系统。163 个信息源 · 13 个中文热榜 · 10 个阅读分区 · 纯 CLI 驱动，无 Web UI。",
   "main": "scripts/cli.js",
   "scripts": {
     "all:afternoon": "npm run fetch:afternoon && npm run gen:afternoon && npm run send:afternoon",
