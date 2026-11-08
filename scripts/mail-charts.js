@@ -9,12 +9,14 @@
  * 宽度：全部使用 viewBox + width:100%，由容器决定实际尺寸，天然适配移动端。
  */
 
+/* ── 默认配色常量：图表默认用这套，可被各图表 opts.color 覆盖 ── */
 const T = {
   brand1: '#6366F1', brand2: '#8B5CF6', brand3: '#A855F7',
   ink: '#0F172A', ink2: '#334155', ink3: '#64748B', ink4: '#94A3B8',
   line: '#E8ECF3', white: '#FFFFFF',
 };
 
+/** HTML 转义（防止 SVG 内文本注入） */
 function esc(s) {
   const AMP = String.fromCharCode(38);
   const Q = String.fromCharCode(34);
@@ -79,6 +81,7 @@ function donutChart(data, opts) {
 /* ============================================================
    2. 横向条形图 —— 宽度自适应
    ============================================================ */
+/** 横向条形图（标签 + 进度条 + 数值） */
 function barChartH(data, opts) {
   opts = opts || {};
   const width = opts.width || 300;
@@ -119,6 +122,7 @@ function barChartH(data, opts) {
 /* ============================================================
    3. 竖向柱状图
    ============================================================ */
+/** 竖向柱状图（标签在底，柱顶数值） */
 function barChartV(data, opts) {
   opts = opts || {};
   const width = opts.width || 340;
@@ -176,6 +180,7 @@ function barChartV(data, opts) {
 /* ============================================================
    4. 折线面积图
    ============================================================ */
+/** 折线面积图（平滑曲线 + 渐变填充，适合时间序列趋势） */
 function areaChart(data, opts) {
   opts = opts || {};
   const width = opts.width || 340;
@@ -244,6 +249,7 @@ function areaChart(data, opts) {
 /* ============================================================
    5. 雷达图
    ============================================================ */
+/** 雷达图（蜘蛛网图，多维能力对比） */
 function radarChart(data, opts) {
   opts = opts || {};
   const size = opts.size || 240;
@@ -306,6 +312,7 @@ function radarChart(data, opts) {
 /* ============================================================
    6. 环形进度
    ============================================================ */
+/** 环形进度条（完成比例 0~1，中央可带文字） */
 function progressRings(items, opts) {
   opts = opts || {};
   const size = opts.size || 88;
@@ -335,6 +342,7 @@ function progressRings(items, opts) {
 /* ============================================================
    7. 迷你走势线
    ============================================================ */
+/** 迷你走势线（无坐标轴的极简折线） */
 function sparkline(values, opts) {
   opts = opts || {};
   const width = opts.width || 100;

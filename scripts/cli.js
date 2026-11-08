@@ -1,9 +1,11 @@
 #!/usr/bin/env node
 /**
- * cli.js — LumaPost 命令行入口 (v10.6.0)
+ * cli.js — LumaPost 命令行入口（v10.7.1，分层架构版）
  *
- * Web UI 已移除，本项目改为「纯 CLI + AI Agent 驱动」。
- * 所有原先通过网页完成的操作，这里都有等价命令，且可被 Agent 直接调用。
+ * 架构说明（方案A：模块化分层）：
+ *   本项目为纯 CLI 驱动，无 Web UI / 本地网关。
+ *   所有操作统一从这里进入，编排逻辑集中到 lib/orchestrator.js，
+ *   基础设施（路径/锁/日志/任务状态/版块定义）集中在 lib/ 目录。
  *
  * ── 常用 ──
  *   node scripts/cli.js status                运行状态与健康度
@@ -21,7 +23,7 @@
  *   node scripts/cli.js fetch morning         只抓取
  *   node scripts/cli.js gen morning           只生成 HTML
  *   node scripts/cli.js send morning          只发送
- *   node scripts/cli.json serve               启动常驻调度器
+ *   node scripts/cli.js serve                 启动常驻调度器
  *
  * ── 维护 ──
  *   node scripts/cli.js test-ai               测试 AI 通道
@@ -34,14 +36,24 @@ const path = require('path');
 const fs = require('fs');
 const { spawnSync } = require('child_process');
 
-const ROOT = path.resolve(__dirname, '..');
-const SLOTS = ['morning', 'noon', 'afternoon', 'evening'];
+/* ── 引入分层架构模块 ── */
+const paths = require('../lib/paths');            // 统一路径常量
+const sections = require('../lib/sections');      // 版块定义（单一数据源）
+const orch = require('../lib/orchestrator');      // 编排层（fetch→gen→send）
+const jobs = require('../lib/jobstore');          // 任务状态存储
 
+/* ── 项目根目录 ── */
+const ROOT = paths.ROOT;
+/* ── 4 个可运行的时段 ── */
+const SLOTS = paths.SLOTS;
+
+/* ── 命令行参数解析 ── */
 const argv = process.argv.slice(2);
-const cmd = (argv[0] || 'help').toLowerCase();
-const args = argv.slice(1);
-const has = (f) => args.indexOf(f) >= 0;
+const cmd = (argv[0] || 'help').toLowerCase();   // 子命令名
+const args = argv.slice(1);                        // 子命令参数
+const has = (f) => args.indexOf(f) >= 0;           // 判断是否含某参数
 
+/* ── 配置存储单例（懒加载，避免循环依赖） ── */
 function store() { return require('./config-store'); }
 
 /** v10.7.0：这些配置项是数组，`set` 时按逗号切分 */
@@ -50,28 +62,31 @@ const ARRAY_KEYS = [
   'sources.enhance.hotTypes',
 ];
 
+/* ── 输出工具 ── */
 function out(s) { process.stdout.write(String(s) + '\n'); }
 function line() { out('─'.repeat(58)); }
+
+/**
+ * 规范化时段参数（默认 morning）。
+ * @param {string} v 用户传入的时段
+ * @param {string} [def='morning'] 默认值
+ * @returns {string} 合法时段名
+ */
 function slotOf(v, def) {
   const s = String(v || def || 'morning');
   return SLOTS.indexOf(s) >= 0 ? s : (def || 'morning');
 }
-function run(script, scriptArgs, label) {
-  out('▶ ' + label);
-  const r = spawnSync(process.execPath, [path.join(ROOT, 'scripts', script)].concat(scriptArgs || []), {
-    cwd: ROOT, stdio: 'inherit', env: process.env,
-  });
-  return r.status === 0;
-}
 
-/* ─────────── status ─────────── */
+/* ═══════════════════════════════════════════
+ *  status —— 总览面板
+ * ═══════════════════════════════════════════ */
 function cmdStatus() {
   const c = store();
   const cfg = c.getAll();
   const hist = c.getHistory();
-  const lf = (hist.fetchHistory || [])[0] || null;
-  const ls = (hist.sendHistory || [])[0] || null;
-  const val = c.validate();
+  const lf = (hist.fetchHistory || [])[0] || null;   // 最近抓取记录
+  const ls = (hist.sendHistory || [])[0] || null;    // 最近发送记录
+  const val = c.validate();                           // 配置体检结果
 
   line();
   out('  LumaPost 光影邮报  v' + cfg.version);
@@ -94,12 +109,35 @@ function cmdStatus() {
   (val.warnings || []).forEach(w => out('            ⚠ ' + w));
   line();
 
+  /* 信息源启用统计 */
   const enabled = ((cfg.sources || {}).rss || []).filter(s => s.enabled !== false).length;
   out('  信息源    ' + enabled + ' 个已启用');
   line();
+
+  /* 任务状态（jobstore）展示 */
+  const allJobs = jobs.allStatus();
+  const anyJobs = Object.keys(allJobs).length > 0;
+  if (anyJobs) {
+    out('');
+    out('  任务状态（最近一次）');
+    SLOTS.forEach(slot => {
+      const j = allJobs[slot];
+      if (!j) return;
+      const parts = ['fetch', 'gen', 'send'].map(ph => {
+        const t = j[ph];
+        if (!t) return ph + ':—';
+        const icon = t.status === 'success' ? '✅' : t.status === 'failed' ? '❌' : t.status === 'running' ? '⏳' : '·';
+        return ph + ':' + icon;
+      }).join('  ');
+      out('    ' + slot.padEnd(10) + parts + (j.send && j.send.error ? '  ⚠ ' + j.send.error.slice(0, 30) : ''));
+    });
+    line();
+  }
 }
 
-/* ─────────── config ─────────── */
+/* ═══════════════════════════════════════════
+ *  config —— 查看配置（密钥脱敏）
+ * ═══════════════════════════════════════════ */
 function cmdConfig() {
   const c = store();
   if (args[0]) {
@@ -110,9 +148,12 @@ function cmdConfig() {
   out(JSON.stringify(c.sanitizeForOutput(c.getAll()), null, 2));
 }
 
+/* ═══════════════════════════════════════════
+ *  set —— 修改单项配置
+ * ═══════════════════════════════════════════ */
 function cmdSet() {
-  const key = args[0];
-  const raw = args.slice(1).join(' ');
+  const key = args[0];                 // 点路径，如 email.itemsTotal
+  const raw = args.slice(1).join(' '); // 原始值字符串
   // v10.7.0：允许把数组型配置显式设为空（args 长度为 1，raw 为空串），
   // 因此用 arguments 长度判断“有没有给值”，而不是用 raw === ''
   const hasValue = args.length > 1;
@@ -126,9 +167,9 @@ function cmdSet() {
     process.exit(1);
   }
   let val = raw;
-  if (raw === 'true') val = true;
-  else if (raw === 'false') val = false;
-  else if (/^-?\d+(\.\d+)?$/.test(raw)) val = Number(raw);
+  if (raw === 'true') val = true;                    // 字符串 true → 布尔
+  else if (raw === 'false') val = false;             // 字符串 false → 布尔
+  else if (/^-?\d+(\.\d+)?$/.test(raw)) val = Number(raw); // 数字字符串 → number
   // v10.7.0：数组型配置支持逗号分隔写法
   //   node scripts/cli.js set sections.enabled ai,hardware,news
   //   node scripts/cli.js set sections.enabled ""        → 空数组（全部关闭）
@@ -142,18 +183,23 @@ function cmdSet() {
   if (!ok) process.exit(1);
 }
 
+/* ═══════════════════════════════════════════
+ *  doctor —— 配置体检
+ * ═══════════════════════════════════════════ */
 function cmdDoctor() {
   const r = store().validate();
   out(JSON.stringify(r, null, 2));
   process.exit(r.valid ? 0 : 1);
 }
 
-/* ─────────── sources ─────────── */
+/* ═══════════════════════════════════════════
+ *  sources —— 信息源状态
+ * ═══════════════════════════════════════════ */
 function cmdSources() {
   const cfg = store().getAll();
-  const rss = (cfg.sources || {}).rss || [];
-  const cat = require('./sources-catalog');
-  const on = rss.filter(s => s.enabled !== false);
+  const rss = (cfg.sources || {}).rss || [];   // 已配置的信息源
+  const cat = require('./sources-catalog');     // 内置源目录
+  const on = rss.filter(s => s.enabled !== false); // 已启用的
 
   line();
   out('  信息源状态');
@@ -164,12 +210,14 @@ function cmdSources() {
   out('  RSS 总开关    ' + ((cfg.sources || {}).enableRss !== false ? '开' : '关'));
   out('  网页源兜底    ' + ((cfg.sources || {}).useWebFallback !== false ? '开' : '关'));
   out('');
+  /* 按分类统计 */
   const by = {};
   on.forEach(s => { by[s.category || '?'] = (by[s.category || '?'] || 0) + 1; });
   out('  分类分布:');
   Object.keys(by).sort().forEach(k => out('    ' + k.padEnd(14) + by[k]));
   line();
 
+  /* --all：列出全部源 */
   if (has('--all')) {
     out('');
     out('  全部源清单:');
@@ -177,17 +225,22 @@ function cmdSources() {
   }
 }
 
+/* ═══════════════════════════════════════════
+ *  sources:enable —— 一键启用全部信息源
+ * ═══════════════════════════════════════════ */
 function cmdSourcesEnable() {
-  // 一键全部启用
   const c = store();
   const rss = ((c.get('sources') || {}).rss || []).map(s => Object.assign({}, s, { enabled: true }));
   const ok = c.update({ sources: { enableRss: true, useWebFallback: true, rss } });
   out(ok ? '✅ 已启用全部 ' + rss.length + ' 个信息源' : '❌ 失败');
 }
 
+/* ═══════════════════════════════════════════
+ *  sections —— 阅读版块启用状态
+ * ═══════════════════════════════════════════ */
 function cmdSections() {
   const cfg = store().getAll();
-  const all = require('./fetch-news-ai').ALL_SECTIONS;
+  const all = sections.ALL_SECTIONS;   // 从 lib/sections.js 取版块定义（单一数据源）
   const on = (cfg.sections || {}).enabled || [];
   const onSet = new Set(on);
 
@@ -208,42 +261,57 @@ function cmdSections() {
   line();
 }
 
+/* ═══════════════════════════════════════════
+ *  sections:enable —— 启用全部版块
+ * ═══════════════════════════════════════════ */
 function cmdSectionsEnable() {
-  // 启用全部版块
-  const all = require('./fetch-news-ai').ALL_SECTIONS.map(function (s) { return s.key; });
+  const all = sections.ALL_SECTIONS.map(function (s) { return s.key; });
   const ok = store().set('sections.enabled', all);
   out(ok ? '✅ 已启用全部 ' + all.length + ' 个版块: ' + all.join(', ') : '❌ 失败');
 }
 
-/* ─────────── run ─────────── */
+/* ═══════════════════════════════════════════
+ *  run —— 完整流水线（fetch→gen→send）
+ *  统一走 lib/orchestrator.js，行为与调度器一致
+ * ═══════════════════════════════════════════ */
 function cmdRun() {
   const slot = slotOf(args[0]);
-  out('=== ' + slot + ' 完整流程 ===');
-  if (!run('fetch-news-ai.js', ['--period=' + slot], '① 抓取 + AI 编排')) process.exit(1);
-  if (!run('gen-html.js', ['--data-file=data/' + slot + '-latest.json', '--output=data/' + slot + '-email.html'], '② 生成邮件')) process.exit(1);
-  const sendArgs = ['--period=' + slot];
-  if (has('--allow-degraded')) sendArgs.push('--allow-degraded');
-  if (!run('send-mail.js', sendArgs, '③ 发送')) process.exit(1);
-  out('✅ 完成');
+  const opts = { allowDegraded: has('--allow-degraded') };
+  if (orch.runPipeline(slot, opts)) {
+    out('✅ 完成');
+  } else {
+    process.exit(1);
+  }
 }
 
+/* ═══════════════════════════════════════════
+ *  fetch —— 只抓取
+ * ═══════════════════════════════════════════ */
 function cmdFetch() {
   const slot = slotOf(args[0]);
-  if (!run('fetch-news-ai.js', ['--period=' + slot], '抓取 ' + slot)) process.exit(1);
+  if (!orch.runFetch(slot)) process.exit(1);
 }
 
+/* ═══════════════════════════════════════════
+ *  gen —— 只生成 HTML
+ * ═══════════════════════════════════════════ */
 function cmdGen() {
   const slot = slotOf(args[0]);
-  if (!run('gen-html.js', ['--data-file=data/' + slot + '-latest.json', '--output=data/' + slot + '-email.html'], '生成 ' + slot)) process.exit(1);
+  if (!orch.runGen(slot)) process.exit(1);
 }
 
+/* ═══════════════════════════════════════════
+ *  send —— 只发送
+ * ═══════════════════════════════════════════ */
 function cmdSend() {
   const slot = slotOf(args[0]);
-  const a = ['--period=' + slot];
-  if (has('--allow-degraded')) a.push('--allow-degraded');
-  if (!run('send-mail.js', a, '发送 ' + slot)) process.exit(1);
+  const opts = { allowDegraded: has('--allow-degraded') };
+  if (!orch.runSend(slot, opts)) process.exit(1);
 }
 
+/* ═══════════════════════════════════════════
+ *  serve —— 启动常驻调度器
+ * ═══════════════════════════════════════════ */
 function cmdServe() {
   const s = require('./scheduler');
   const cfg = store().getAll();
@@ -255,7 +323,9 @@ function cmdServe() {
   setInterval(() => {}, 1 << 30);
 }
 
-/* ─────────── 维护 ─────────── */
+/* ═══════════════════════════════════════════
+ *  test-ai —— 测试 AI 通道
+ * ═══════════════════════════════════════════ */
 function cmdTestAi() {
   const ai = require('./ai-provider');
   const cfg = ai.getConfig();
@@ -269,6 +339,9 @@ function cmdTestAi() {
     .catch(e => { out('❌ ' + e.message.slice(0, 300)); process.exit(1); });
 }
 
+/* ═══════════════════════════════════════════
+ *  test-mail —— 测试邮件通道
+ * ═══════════════════════════════════════════ */
 function cmdTestMail() {
   const cfg = store().getAll();
   const to = cfg.mail.to || cfg.mail.user;
@@ -284,6 +357,9 @@ function cmdTestMail() {
     .catch(e => { out('❌ ' + e.message.slice(0, 300)); process.exit(1); });
 }
 
+/* ═══════════════════════════════════════════
+ *  history —— 最近抓取/发送记录
+ * ═══════════════════════════════════════════ */
 function cmdHistory() {
   const n = parseInt(args[0], 10) || 10;
   const h = store().getHistory();
@@ -307,20 +383,26 @@ function cmdHistory() {
   line();
 }
 
+/* ═══════════════════════════════════════════
+ *  preview —— 生成浏览器可看的预览（不发信）
+ * ═══════════════════════════════════════════ */
 function cmdPreview() {
   const slot = slotOf(args[0]);
-  const dataFile = path.join(ROOT, 'data', slot + '-latest.json');
+  const dataFile = paths.dataFile(slot);   // 用 lib/paths 统一路径
   if (!fs.existsSync(dataFile)) { out('❌ 无数据: ' + dataFile); process.exit(1); }
-  const outFile = path.join(ROOT, 'data', 'preview-' + slot + '.html');
+  const outFile = paths.previewFile(slot);
   const g = require('./gen-html');
   const cfg = store().getAll();
-  const html = g.generateHTML(JSON.parse(fs.readFileSync(dataFile, 'utf8')),
-    (cfg.mail || {}).theme, (cfg.mail || {}).customTheme);
+  const data = JSON.parse(fs.readFileSync(dataFile, 'utf8'));
+  const html = g.generateHTML(data, (cfg.mail || {}).theme, (cfg.mail || {}).customTheme);
   fs.writeFileSync(outFile, html, 'utf8');
-  fs.writeFileSync(outFile.replace(/\.html$/, '.txt'), g.generateText(JSON.parse(fs.readFileSync(dataFile, 'utf8'))), 'utf8');
+  fs.writeFileSync(paths.previewTextFile(slot), g.generateText(data), 'utf8');
   out('✅ 预览已生成: ' + outFile + '  (' + Math.round(Buffer.byteLength(html) / 1024) + ' KB)');
 }
 
+/* ═══════════════════════════════════════════
+ *  reset —— 重置配置
+ * ═══════════════════════════════════════════ */
 function cmdReset() {
   if (!has('--yes')) {
     out('这会清空所有配置（含 API Key、邮箱授权码）。确认请加 --yes');
@@ -331,11 +413,16 @@ function cmdReset() {
   out('✅ 配置已重置为默认值');
 }
 
+/* ═══════════════════════════════════════════
+ *  help —— 打印内置说明（从本文件头部注释提取）
+ * ═══════════════════════════════════════════ */
 function cmdHelp() {
   out(fs.readFileSync(__filename, 'utf8').split('*/')[0].split('/**')[1].replace(/^\s*\* ?/gm, ''));
 }
 
-/* ─────────── 分发 ─────────── */
+/* ═══════════════════════════════════════════
+ *  命令分发表
+ * ═══════════════════════════════════════════ */
 const CMDS = {
   status: cmdStatus,
   config: cmdConfig,
@@ -358,6 +445,9 @@ const CMDS = {
   help: cmdHelp,
 };
 
+/* ═══════════════════════════════════════════
+ *  入口分发
+ * ═══════════════════════════════════════════ */
 if (CMDS[cmd]) {
   CMDS[cmd]();
 } else {

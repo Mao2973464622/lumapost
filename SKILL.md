@@ -201,7 +201,7 @@ AI 在「需要注意」一节里必须按以下规则判断，不要凭感觉�
 | `maxTokens < 2000` | ⚠ 任何模型都偏小 | `set ai.maxTokens 4096` |
 | `temperature > 0.8` | ⚠ 结构化输出易破 JSON | `set ai.temperature 0.6` |
 | `temperature < 0.2` | ⚠ 内容过于呆板 | `set ai.temperature 0.6` |
-| `provider = custom` 且 `baseUrl` 指向 `127.0.0.1` / `localhost` | ℹ 走本地网关，稳定性取决于网关 | 提示用户网关可能间歇性返回空 |
+| `provider = custom` 且 `baseUrl` 指向 `127.0.0.1` / `localhost` | ℹ 指向本机 AI 代理服务（非项目自身网关） | 提示该代理可能间歇性返回空，建议换直达 API |
 | `apiKey` 为空 | ❌ 致命，抓取必失败 | 见 `docs/configuration.md` 获取 Key |
 | `timeout < 30000` | ⚠ 长文编排易超时 | `set ai.timeout 90000` |
 

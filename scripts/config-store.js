@@ -57,12 +57,8 @@ const DEFAULT_CONFIG = {
   weather: { lat: '28.20', lon: '112.97', city: '湖南长沙' },
 
   app: {
-    // v10.7.0：Web UI 已移除，port/host/language/theme 仅为旧配置兼容而保留，
-    // 不再有任何 HTTP 服务监听，改这些值不会有效果。
-    port: 3000,
-    host: '127.0.0.1',
-    language: 'zh-CN',
-    theme: 'auto',
+    // v10.7.0：Web UI 已移除，不再有 HTTP 服务监听。
+    // port/host/language/theme 这些 Web 时代的残留字段已彻底移除。
     // 定时调度总开关：默认关闭。用户需要自动发信时显式打开。
     autoSchedule: false,
   },
@@ -401,9 +397,6 @@ function validate() {
   for (const k of Object.keys(c.schedule || {})) {
     if (!re.test(c.schedule[k] || '')) errors.push('时段 ' + k + ' 时间格式无效');
   }
-
-  const port = Number(c.app.port);
-  if (!Number.isInteger(port) || port < 1 || port > 65535) errors.push('端口号无效');
 
   // v10.7.0：版块为空时抓取会中止（退出码 2），这里升级为 error 而非 warning
   const secOn = (c.sections && Array.isArray(c.sections.enabled)) ? c.sections.enabled : [];

@@ -1,11 +1,8 @@
 #!/usr/bin/env node
 /**
- * sources-catalog.js — 内置信息源库（v5.3）
- *
- * 163 个信息源，覆盖 17 个领域。
- * 全部逐个 HTTP 实测（解析出真实条目才算通过），不稳定源已剔除。
- * v10.7.1：剔除 12 个不稳定源（超时/403/404/406），175 → 163 条。
- * 用户可在 Web UI「信息源」页增删改，改动写入 config/app.json。
+ * sources-catalog.js — 内置信息源库
+ * 163 个信息源（全部 HTTP 实测，不稳定源已剔除），覆盖 17 个领域。
+ * 增删改通过命令行完成，改动写入 config/app.json。
  */
 
 const CATALOG = [
@@ -174,6 +171,7 @@ const CATALOG = [
   { name: "FourFourTwo", url: "https://www.fourfourtwo.com/feeds/all", category: "sports", lang: "en" },
 ];
 
+/* ── 领域中文名映射：category key → 中文名（用于展示/分组统计） ── */
 const CATEGORIES = {
   "ai": "人工智能",
   "hardware": "硬件数码",
@@ -194,6 +192,7 @@ const CATEGORIES = {
   "life": "生活方式",
 };
 
+/* ── 内置搜索引擎列表：key → 名称与搜索 URL 模板（{q} 会被替换为查询词） ── */
 const SEARCH_ENGINES = {
   "bing": { name: "Bing", url: "https://www.bing.com/search?q={q}" },
   "google": { name: "Google", url: "https://www.google.com/search?q={q}" },
@@ -201,10 +200,20 @@ const SEARCH_ENGINES = {
   "ddg": { name: "DuckDuckGo", url: "https://duckduckgo.com/?q={q}" },
 };
 
+/**
+ * 按领域分类筛选信息源。
+ * @param {string} cat 领域 key（如 'ai'）
+ * @returns {object[]} 属于该领域的信息源数组
+ */
 function getByCategory(cat) {
   return CATALOG.filter(function (s) { return s.category === cat; });
 }
 
+/**
+ * 每个领域各取前若干条作为「推荐源」。
+ * @param {number} [perCategory=2] 每个领域取几条
+ * @returns {object[]} 推荐的源列表（按领域顺序）
+ */
 function getRecommended(perCategory) {
   perCategory = perCategory || 2;
   const out = [];
@@ -214,4 +223,5 @@ function getRecommended(perCategory) {
   return out;
 }
 
+/* ── 对外导出 ── */
 module.exports = { CATALOG, CATEGORIES, SEARCH_ENGINES, getByCategory, getRecommended };

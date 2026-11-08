@@ -530,8 +530,9 @@ node scripts/cli.js set weather.lon 116.41
 | 变量 | 默认 | 说明 |
 |---|---|---|
 | `app.autoSchedule` | `false` | 调度总开关（见第 6 节） |
-| `app.port` / `app.host` | `3000` / `127.0.0.1` | **历史遗留**。Web UI 已删除，改这些没有效果 |
-| `app.language` / `app.theme` | `zh-CN` / `auto` | **历史遗留**，无实际作用 |
+
+> Web UI 时代的 `app.port` / `app.host` / `app.language` / `app.theme` 已彻底移除。
+> 本项目为纯 CLI + 调度器，无任何 HTTP 服务监听。
 
 ---
 
@@ -589,7 +590,6 @@ node scripts/cli.js doctor
 - 发件邮箱与授权码是否设置
 - `custom-smtp` 是否有 `smtpHost`
 - 4 个时段的时间格式是否合法
-- 端口是否在有效范围
 - 版块是否至少启用一个
 - 信息源是否至少有一个可用通道
 - `maxTokens` 是否偏高/偏低

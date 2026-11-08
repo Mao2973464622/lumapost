@@ -1,6 +1,6 @@
 {
   "name": "lumapost",
-  "version": "10.7.1",
+  "version": "10.7.2",
   "description": "LumaPost 光影邮报 — AI 驱动的智能新闻邮件系统。163 个信息源 · 13 个中文热榜 · 10 个阅读分区 · 纯 CLI 驱动，无 Web UI。",
   "main": "scripts/cli.js",
   "scripts": {

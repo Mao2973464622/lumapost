@@ -1,9 +1,14 @@
 #!/usr/bin/env node
 /**
- * scheduler.js — 内置定时调度器 (v5.0)
+ * scheduler.js — 内置定时调度器（v5.1，分层架构版）
  *
- * 解决原项目「Web UI 里的时间只是摆设，必须靠 crontab」的问题。
- * 由 web-server 启动，每 30 秒对表一次；配置改动无需重启。
+ * 架构说明：
+ *   本项目为纯 CLI 驱动，无 Web UI / 本地网关。
+ *   调度器是常驻进程（由 `cli.js serve` 启动），每 30 秒对表一次；
+ *   配置改动无需重启。
+ *   触发动作统一走 lib/orchestrator.js，与 CLI 的 run 行为一致：
+ *     - fetch: orchestrator.runFetch(slot)
+ *     - send : orchestrator.runSend(slot)
  *
  * 触发动作：
  *   - fetch: node scripts/fetch-news-ai.js --period=<slot>
@@ -14,9 +19,13 @@ const { spawn } = require('child_process');
 const path = require('path');
 const fs = require('fs');
 
+/* ── 引入分层架构模块 ── */
+const paths = require('../lib/paths');      // 统一路径常量
+const jobs = require('../lib/jobstore');    // 任务状态存储（与 CLI 共用同一套追踪）
+
 const ROOT = path.resolve(__dirname, '..');
-const SLOTS = ['morning', 'noon', 'afternoon', 'evening'];
-const STATE_FILE = path.join(ROOT, 'data', 'scheduler-state.json');
+const SLOTS = paths.SLOTS;                  // 4 个时段，来自 lib/paths
+const STATE_FILE = paths.SCHED_STATE_FILE;  // 调度器状态文件，来自 lib/paths
 
 let store = null;
 try { store = require('./config-store'); } catch (e) { store = null; }
@@ -133,7 +142,9 @@ async function fire(slot, opts) {
   try {
     if (delivery.fetch !== false) {
       if (store) store.addHistory('fetchHistory', { title: '定时抓取 · ' + slot, status: '运行中', trigger: opts.manual ? '手动' : '定时' });
+      jobs.start(slot, 'fetch');   // 任务状态：标记抓取开始（与 CLI 共用追踪）
       const r = await runScript('fetch-news-ai.js', ['--period=' + slot]);
+      jobs.finish(slot, 'fetch', r.ok, r.ok ? null : (r.error || '退出码 ' + r.code));   // 标记抓取结束
       // v10.5.0：抓取子进程自己会写结果；这里只在子进程未落历史时补一条，避免重复
       const summary = fetchSummary(slot);
       log('抓取 ' + slot + ' ' + (r.ok ? '完成' : '失败: ' + (r.error || '退出码 ' + r.code))
@@ -152,7 +163,9 @@ async function fire(slot, opts) {
     // v10.5.0：抓取失败时不再发送（旧逻辑会照发旧 HTML）
     const fetchOk = delivery.fetch === false || (result.fetch && result.fetch.ok);
     if (delivery.send === true && fetchOk) {
+      jobs.start(slot, 'send');   // 任务状态：标记发送开始
       const r = await runScript('send-mail.js', ['--period=' + slot]);
+      jobs.finish(slot, 'send', r.ok, r.ok ? null : (r.error || '退出码 ' + r.code));   // 标记发送结束
       result.send = { ok: r.ok, code: r.code, error: r.ok ? undefined : (r.error || '退出码 ' + r.code) };
       log('发送 ' + slot + ' ' + (r.ok ? '完成' : '失败: ' + (r.error || '退出码 ' + r.code)));
     } else if (delivery.send === true && !fetchOk) {

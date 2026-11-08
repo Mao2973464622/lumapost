@@ -4,11 +4,11 @@
 
 **AI 驱动的智能新闻邮件系统**
 
-175 个信息源 · 13 个中文热榜 · 10 个阅读分区 · 纯 CLI 驱动
+163 个信息源 · 13 个中文热榜 · 10 个阅读分区 · 纯 CLI 驱动
 
 [![Node](https://img.shields.io/badge/node-%E2%89%A518-brightgreen?style=flat-square)](https://nodejs.org)
 [![License](https://img.shields.io/badge/license-MIT-blue?style=flat-square)](LICENSE)
-[![Version](https://img.shields.io/badge/version-10.7.1-orange?style=flat-square)](#版本历史)
+[![Version](https://img.shields.io/badge/version-10.7.2-orange?style=flat-square)](#版本历史)
 [![Tests](https://img.shields.io/badge/tests-26%20passed-brightgreen?style=flat-square)](#测试)
 [![No Web UI](https://img.shields.io/badge/Web%20UI-removed-lightgrey?style=flat-square)](#设计取舍)
 
@@ -24,7 +24,7 @@
 
 | 步骤 | 动作 | 产出 |
 |---|---|---|
-| ① **抓** | 175 个 RSS/Atom 源 + 13 个中文热榜 + Steam/Epic/行情/GitHub Trending | 原始素材 |
+| ① **抓** | 163 个 RSS/Atom 源 + 13 个中文热榜 + Steam/Epic/行情/GitHub Trending | 原始素材 |
 | ② **编** | AI 主编按 10 个阅读版块重组，写摘要、写 100–200 字深度解读 | 结构化 JSON |
 | ③ **排** | 渲染成带分区导航的 HTML 邮件 + 纯文本备选体 | HTML / TXT |
 | ④ **发** | 通过 SMTP 或 HTTP API 投递 | 你的邮箱 |
@@ -78,7 +78,7 @@ node scripts/cli.js run morning     # 抓取→渲染→发送
 
 ```bash
 node scripts/cli.js sections:enable   # 10 个版块全开
-node scripts/cli.js sources:enable    # 175 个源全开
+node scripts/cli.js sources:enable    # 163 个源全开
 ```
 
 > ⚠️ **默认状态是「全部关闭」**：版块、信息源、定时任务都关着。
@@ -109,7 +109,7 @@ node scripts/cli.js <命令> [参数]
 | `config` | 全部配置（密钥自动打码） |
 | `config ai` | 只看某一段 |
 | `sections` | 10 个阅读版块的启用状态 |
-| `sources` | 信息源状态 + 分类分布；`sources --all` 列全部 175 条 |
+| `sources` | 信息源状态 + 分类分布；`sources --all` 列全部 163 条 |
 | `history 20` | 最近 20 条抓取/发送记录 |
 | `doctor` | 配置体检（退出码 0 通过 / 1 有错） |
 | `help` | 打印内置说明 |
@@ -293,7 +293,7 @@ node scripts/cli.js send morning --allow-degraded
                   ┌──────────────┐
                   │  信息源（三层）│
                   ├──────────────┤
-                  │ RSS 175 个   │
+                  │ RSS 163 个   │
                   │ 中文热榜 13 个│
                   │ 网页/API 源   │
                   └──────┬───────┘
@@ -385,6 +385,23 @@ v10.6.0 之前有一套 126 KB 的单页管理后台。删掉的理由：
 代价是「改配置要看文档」。所以配了 `docs/configuration.md`（620 行逐项说明）
 和 `SKILL.md`（让 AI 替你改）。
 
+### 为什么采用分层架构（方案A）
+
+纯 CLI 之上，代码内部做了模块化分层，**对外接口完全不变**，只是内部职责更清晰：
+
+| 层 | 位置 | 职责 |
+|---|---|---|
+| 基础设施 | `lib/paths.js` `lock.js` `logger.js` `jobstore.js` `sections.js` | 路径/锁/日志/任务状态/版块定义的单一数据源 |
+| 编排层 | `lib/orchestrator.js` | 集中管理「抓取→生成→发送」流水线，CLI 与调度器共用 |
+| 应用层 | `scripts/cli.js` `scheduler.js` | 命令入口与常驻调度，只做参数解析与调度 |
+
+好处：
+
+- **CLI 与调度器行为一致**：都走同一套编排，不会出现「命令行跑得通、定时却失败」
+- **任务可追踪**：每阶段（fetch/gen/send）都记录运行状态，`status` 面板直接可见
+- **职责单一**：改版块定义只动 `lib/sections.js`，改路径只动 `lib/paths.js`
+- **无 Web / 无网关**：没有任何 HTTP 监听端口，纯 CLI + 调度器
+
 ### 为什么只留一套主题
 
 原本有 10 套配色。实际使用中：
@@ -397,7 +414,7 @@ v10.6.0 之前有一套 126 KB 的单页管理后台。删掉的理由：
 
 ### 为什么默认全部关闭
 
-新手第一次跑，如果 175 个源 + 13 个热榜 + 10 个版块同时开：
+新手第一次跑，如果 163 个源 + 13 个热榜 + 10 个版块同时开：
 
 - 抓取要 10–20 分钟
 - AI 消耗几百次调用
@@ -490,6 +507,13 @@ npm test
 
 ```
 lumapost/
+├── lib/                    ← 分层架构的基础设施 + 编排层
+│   ├── paths.js              统一路径常量（单一数据源）
+│   ├── lock.js               文件锁（防重复执行）
+│   ├── logger.js             统一日志（分级 + 时间戳）
+│   ├── jobstore.js           任务状态存储（fetch/gen/send 追踪）
+│   ├── sections.js           版块定义 + 时段配置（单一数据源）
+│   └── orchestrator.js       编排层（fetch→gen→send 流水线）
 ├── scripts/
 │   ├── cli.js              ← 所有操作的统一入口
 │   ├── config-store.js       配置读写 + 脱敏 + 历史 + 校验
@@ -498,7 +522,7 @@ lumapost/
 │   ├── fetch-cn-news.js      纯热榜降级抓取
 │   ├── rss-fetcher.js        RSS/Atom/JSON Feed 引擎（零依赖）
 │   ├── hotboard.js           中文热榜 + Steam/Epic/行情/Trending
-│   ├── sources-catalog.js    175 个内置源目录
+│   ├── sources-catalog.js    163 个内置源目录
 │   ├── ai-provider.js        20 家 AI 提供商 + 空响应重试
 │   ├── mail-provider.js      16 家邮件服务适配
 │   ├── gen-html.js           邮件渲染 + 分区导航 + 体积预算
@@ -564,6 +588,7 @@ lumapost/
 ## 版本历史
 | 版本 | 主要变更 |
 |---|---|
+| **10.7.2** | 模块化分层架构（新增 lib/ 基础设施 + 编排层）· CLI 与调度器共用编排 · 移除 Web 残留字段 · config 与源目录去重同步 · 注释精简 |
 | **10.7.1** | 剔除 12 个不稳定信息源（超时/403/404/406），源库 175 → 163 条，仅保留实测可达源 |
 | 10.7.0 | 主题精简为 1 套 · 版块/源/定时默认全关 · `enhance` 并入 `sources` · 移除补跑窗口 · 新增 `sections` 命令 · 文档四件套 |
 | 10.6.0 | 移除 Web UI 改纯 CLI · 分区导航重做 · 预算公平分配 · 卡片体积优化 4.5 倍 · `json-repair.js` |
