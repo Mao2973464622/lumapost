@@ -1,0 +1,143 @@
+# ═══════════════════════════════════════════════════════════════════════════
+#  LumaPost · 光影邮报 — 推送即打包发布 Release
+# ═══════════════════════════════════════════════════════════════════════════
+#
+#  📖 它做什么
+#     每次把代码推送到 main 分支（也就是我们本地 git push 上去）时，自动：
+#       1) 把仓库源码打包成 ZIP
+#       2) 在 GitHub「Releases / 发行版」创建一个新版本
+#       3) 发行版的说明正文 = 本次 git 提交的 commit message（原样照搬）
+#
+#  📌 触发条件
+#     - push 到 main 分支
+#     - 跳过 tag 推送（避免 release 自动打 tag 触发死循环）
+#
+#  📌 版本标签（tag）怎么定
+#     tag = v<版本号>-<commit短SHA>
+#     例如 v10.7.2-8292de9
+#     —— 既体现 package.json 的版本号，又保证每次 push 的 tag 唯一、不冲突。
+#
+#  📌 打包内容
+#     用 git archive HEAD 打包，只含已提交的源码（自动遵循 .gitignore）：
+#       ✅ 包含：scripts/ lib/ docs/ 配置模板 package.json README 等
+#       ❌ 不含：node_modules/、config/app.json（密钥，已被 gitignore）
+#     因此 ZIP 里绝不会泄露任何密钥。
+#
+#  📌 权限
+#     需要 contents: write 才能建 release + 推 tag。
+#     用 GitHub 自带的 GITHUB_TOKEN，无需额外配置 Secret。
+#
+#  📌 幂等
+#     同一 tag 若已存在，先删除旧的再创建，避免 Actions 重跑报错。
+#
+# ═══════════════════════════════════════════════════════════════════════════
+
+name: Release (push -> ZIP -> 发行版)
+
+# ── 触发：推送到 main 分支时 ──
+on:
+  push:
+    branches: [ main ]
+
+# ── 防止同一分支的多次 push 并发跑（排队执行，避免 release 冲突）──
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+# ── 需要的权限：创建 release、推 tag ──
+permissions:
+  contents: write
+
+jobs:
+  release:
+    # 仅当本次 push 带有真实提交内容时才执行（避免异常事件空跑）
+    if: ${{ github.event.head_commit != null }}
+    name: 打包源码并发布 Release
+    runs-on: ubuntu-latest
+
+    steps:
+      # 1) 拉取代码（完整历史，便于 git archive 取 HEAD 与读 commit）
+      - name: 检出代码
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0            # 取完整历史与标签
+          persist-credentials: true # 保留写权限，供 gh 推 tag
+
+      # 2) 计算版本号 / 短SHA / tag / zip 名，写入后续步骤可复用的变量
+      - name: 解析版本与产物命名
+        id: meta
+        run: |
+          # 从 package.json 读版本号（runner 自带 node）
+          VERSION=$(node -p "require('./package.json').version")
+          # 当前提交的短 SHA，保证 tag 唯一
+          SHORT_SHA=$(git rev-parse --short HEAD)
+          TAG="v${VERSION}-${SHORT_SHA}"
+          ZIP="lumapost-${TAG}.zip"
+          # 输出给后续 step 用
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "short_sha=${SHORT_SHA}" >> "$GITHUB_OUTPUT"
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+          echo "zip=${ZIP}" >> "$GITHUB_OUTPUT"
+          echo "✅ 版本号=${VERSION}  短SHA=${SHORT_SHA}  tag=${TAG}"
+
+      # 3) 把本次 commit message 原样写入文件，作为 Release 说明正文
+      - name: 生成 Release 说明（= 本次 git 提交说明）
+        env:
+          # 直接取 push 事件里最后一次 commit 的完整 message（含正文多行）
+          COMMIT_MSG: ${{ github.event.head_commit.message }}
+        run: |
+          # printf 保证多行、特殊字符原样保留
+          printf '%s\n' "$COMMIT_MSG" > RELEASE_NOTES.md
+          echo "Release 说明预览（前 5 行）："
+          head -n 5 RELEASE_NOTES.md
+
+      # 4) 打包源码为 ZIP（git archive 只含已提交文件，自动遵循 .gitignore）
+      - name: 打包源码 ZIP
+        run: |
+          git archive --format=zip -o "${{ steps.meta.outputs.zip }}" HEAD
+          # 校验产物
+          ls -lh "${{ steps.meta.outputs.zip }}"
+          # 二次保险：确认 zip 里没有密钥/依赖（理论上 git archive 本就不含）
+          if unzip -l "${{ steps.meta.outputs.zip }}" | grep -E 'config/app\.json|node_modules'; then
+            echo "❌ 打包结果意外包含了敏感/依赖文件，中止！"
+            exit 1
+          fi
+          echo "✅ ZIP 安全检查通过（无密钥、无 node_modules）"
+
+      # 5) 创建 / 更新 Release，并上传 ZIP 作为附件
+      - name: 发布到 GitHub Releases
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}   # 自带令牌，免登录
+          TAG: ${{ steps.meta.outputs.tag }}
+          ZIP: ${{ steps.meta.outputs.zip }}
+          VERSION: ${{ steps.meta.outputs.version }}
+          SHORT_SHA: ${{ steps.meta.outputs.short_sha }}
+        run: |
+          # 幂等：若同 tag 的 release 已存在，先删旧的再建
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "已存在 $TAG，删除旧 Release 后重建..."
+            gh release delete "$TAG" --yes --cleanup-tag
+          fi
+          # 创建 release：
+          #   标题 = LumaPost <版本> (<短SHA>)
+          #   正文 = 本次 commit message（RELEASE_NOTES.md）
+          #   目标 = 当前提交
+          #   附件 = 源码 ZIP
+          gh release create "$TAG" "$ZIP" \
+            --target "$GITHUB_SHA" \
+            --title "LumaPost ${VERSION} (${SHORT_SHA})" \
+            --notes-file RELEASE_NOTES.md \
+            --latest
+          echo "✅ 已发布 Release：$TAG，并附上源码包 $ZIP"
+
+      # 6) 把发布摘要打印到控制台，便于 Actions 日志核对
+      - name: 发布结果摘要
+        run: |
+          echo "═══════════════════════════════════════════════"
+          echo "  Release : ${{ steps.meta.outputs.tag }}"
+          echo "  版本    : ${{ steps.meta.outputs.version }}"
+          echo "  提交    : ${{ steps.meta.outputs.short_sha }}"
+          echo "  源码包  : ${{ steps.meta.outputs.zip }}"
+          echo "  说明    : 与本次 git commit message 完全一致"
+          echo "  地址    : ${{ github.server_url }}/${{ github.repository }}/releases"
+          echo "═══════════════════════════════════════════════"
